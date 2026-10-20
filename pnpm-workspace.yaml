@@ -1,0 +1,39 @@
+packages:
+  - apps/*
+  - examples/*
+  - packages/*
+  - providers/*
+
+# 全仓共享版本，子包通过 "catalog:" 引用，避免版本漂移
+catalog:
+  '@changesets/cli': 3.0.3
+  '@types/node': 26.6.5
+  '@vitest/coverage-v8': 5.0.5
+  fast-check: 4.10.2
+  oxlint: 1.89.0
+  prettier: 3.9.10
+  typescript: 7.0.2
+  vite: 8.3.4
+  vitest: 5.0.5
+
+minimumReleaseAgeExclude:
+  - '@oxlint/binding-android-arm-eabi@1.89.0'
+  - '@oxlint/binding-android-arm64@1.89.0'
+  - '@oxlint/binding-darwin-arm64@1.89.0'
+  - '@oxlint/binding-darwin-x64@1.89.0'
+  - '@oxlint/binding-freebsd-x64@1.89.0'
+  - '@oxlint/binding-linux-arm-gnueabihf@1.89.0'
+  - '@oxlint/binding-linux-arm-musleabihf@1.89.0'
+  - '@oxlint/binding-linux-arm64-gnu@1.89.0'
+  - '@oxlint/binding-linux-arm64-musl@1.89.0'
+  - '@oxlint/binding-linux-ppc64-gnu@1.89.0'
+  - '@oxlint/binding-linux-riscv64-gnu@1.89.0'
+  - '@oxlint/binding-linux-riscv64-musl@1.89.0'
+  - '@oxlint/binding-linux-s390x-gnu@1.89.0'
+  - '@oxlint/binding-linux-x64-gnu@1.89.0'
+  - '@oxlint/binding-linux-x64-musl@1.89.0'
+  - '@oxlint/binding-openharmony-arm64@1.89.0'
+  - '@oxlint/binding-win32-arm64-msvc@1.89.0'
+  - '@oxlint/binding-win32-ia32-msvc@1.89.0'
+  - '@oxlint/binding-win32-x64-msvc@1.89.0'
+  - oxlint@1.89.0

@@ -1,0 +1,47 @@
+{
+  "name": "@kurumi/core",
+  "version": "0.1.0",
+  "description": "Kurumi 跨 runtime 基础设施：错误基类、JSON 值与错误序列化、RuntimeHost 抽象",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxroot-crypto/kurumi",
+    "directory": "packages/core"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "fast-check": "catalog:",
+    "vitest": "catalog:"
+  }
+}

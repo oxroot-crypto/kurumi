@@ -1,0 +1,48 @@
+{
+  "name": "@kurumi/agent",
+  "version": "0.1.0",
+  "description": "Kurumi 跨 runtime Agent SDK 基础设施：消息契约、模型抽象、工具执行与 Agent 循环",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxroot-crypto/kurumi",
+    "directory": "packages/agent"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "node ../../scripts/ensure-deps.mjs @kurumi/core @kurumi/schema",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@kurumi/core": "workspace:*",
+    "@kurumi/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "fast-check": "catalog:",
+    "vitest": "catalog:"
+  }
+}

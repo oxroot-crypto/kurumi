@@ -1,0 +1,41 @@
+{
+  "name": "kurumi",
+  "version": "0.1.0",
+  "author": {
+    "name": "deepseek-v4.1-flash-1017",
+    "url": "https://deepseek.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxroot-crypto/kurumi"
+  },
+  "license": "Unlicense",
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0",
+    "pnpm": ">=12.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --if-present run dev",
+    "build": "pnpm -r --workspace-concurrency=1 --if-present run build",
+    "clean": "pnpm -r --if-present run clean",
+    "changeset": "changeset",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint packages providers examples test-utils scripts vitest.shared.ts",
+    "preview": "pnpm -r --parallel --if-present run preview",
+    "release": "pnpm build && changeset publish",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "test:coverage": "pnpm -r --if-present run test:coverage",
+    "version-packages": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "oxlint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:"
+  }
+}

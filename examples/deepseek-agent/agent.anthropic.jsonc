@@ -1,0 +1,17 @@
+{
+  // 真实环境验证配置：使用 DeepSeek 的 Anthropic 兼容 API。
+  // 与原 agent.jsonc 共用同一份 verify.ts，仅切换 provider、端点与 thinking 开关。
+  // api_key 支持 {env:NAME} 形式；KURUMI_API_KEY 的优先级更高。
+  "api_key": "{env:DEEPSEEK_API_KEY}",
+  "api_format": "anthropic",
+  "model": "deepseek-flash",
+  "base_url": "https://api.deepseek.com/anthropic",
+  "temperature": 0.2,
+  "max_steps": 4,
+  "max_output_tokens": 2048,
+  "thinking": true,
+  "thinking_budget_tokens": 1024,
+  "reasoning_effort": "high",
+  "log_level": "info",
+  "system": "你是 Kurumi Agent SDK 的验证助手。需要工具时直接调用工具，回答简洁准确。",
+}

@@ -1,0 +1,51 @@
+{
+  "name": "@kurumi/log",
+  "version": "0.1.0",
+  "description": "Kurumi 跨 runtime 日志基础设施：分级、结构化字段、可插拔 sink",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxroot-crypto/kurumi",
+    "directory": "packages/log"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "node ../../scripts/ensure-deps.mjs @kurumi/core",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@kurumi/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "fast-check": "catalog:",
+    "vitest": "catalog:"
+  }
+}

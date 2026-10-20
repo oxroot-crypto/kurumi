@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@kurumi/core": ["../core/src/index.ts"],
+      "@kurumi/core/node": ["../core/src/node/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@kurumi/example-deepseek-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:packages": "pnpm -r --workspace-concurrency=1 --filter @kurumi/core --filter @kurumi/schema --filter @kurumi/config --filter @kurumi/log --filter @kurumi/agent --filter @kurumi/open-ai --filter @kurumi/anthropic run build",
+    "preverify": "pnpm run build:packages",
+    "verify": "node --env-file=.env src/verify.ts",
+    "preverify:anthropic": "pnpm run build:packages",
+    "verify:anthropic": "node --env-file=.env src/verify.ts agent.anthropic.jsonc",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kurumi/agent": "workspace:*",
+    "@kurumi/anthropic": "workspace:*",
+    "@kurumi/config": "workspace:*",
+    "@kurumi/core": "workspace:*",
+    "@kurumi/log": "workspace:*",
+    "@kurumi/open-ai": "workspace:*",
+    "@kurumi/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
