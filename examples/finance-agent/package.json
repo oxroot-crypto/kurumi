@@ -1,0 +1,32 @@
+{
+  "name": "@kurumi/example-finance-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:packages": "pnpm -r --workspace-concurrency=1 --filter @kurumi/core --filter @kurumi/schema --filter @kurumi/config --filter @kurumi/math --filter @kurumi/agent --filter @kurumi/log --filter @kurumi/finance --filter @kurumi/finance-tools --filter @kurumi/open-ai --filter @kurumi/nasdaq --filter @kurumi/binance --filter @kurumi/frankfurter --filter @kurumi/us-treasury --filter @kurumi/sec-edgar run build",
+    "preverify": "pnpm run build:packages",
+    "verify": "node --env-file=.env src/verify.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kurumi/agent": "workspace:*",
+    "@kurumi/binance": "workspace:*",
+    "@kurumi/config": "workspace:*",
+    "@kurumi/core": "workspace:*",
+    "@kurumi/finance": "workspace:*",
+    "@kurumi/finance-tools": "workspace:*",
+    "@kurumi/frankfurter": "workspace:*",
+    "@kurumi/log": "workspace:*",
+    "@kurumi/math": "workspace:*",
+    "@kurumi/nasdaq": "workspace:*",
+    "@kurumi/open-ai": "workspace:*",
+    "@kurumi/schema": "workspace:*",
+    "@kurumi/sec-edgar": "workspace:*",
+    "@kurumi/us-treasury": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -8,3 +8,5 @@ coverage/
 .env
 .env.*
 !.env.example
+/examples/finance-agent/report.md
+.codegraph

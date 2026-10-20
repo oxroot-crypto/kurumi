@@ -41,3 +41,20 @@ export {
   type JsonPrimitive,
   type JsonValue,
 } from './value.js';
+export {
+  CoreValidationError,
+  assertArrayMaxLength,
+  assertBoolean,
+  assertFiniteNumber,
+  assertNonEmptyString,
+  assertOneOf,
+  assertPattern,
+  assertPlainObject,
+  assertPositiveSafeInteger,
+  assertRange,
+  assertSafeInteger,
+  assertString,
+  assertTimestampMs,
+  describeValue,
+  type ValidationErrorFactory,
+} from './validation.js';

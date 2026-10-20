@@ -1,0 +1,48 @@
+{
+  "name": "@kurumi/binance",
+  "version": "0.1.0",
+  "description": "Binance 公开数据只读适配器：现货、永续/期货行情与参考数据",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxroot-crypto/kurumi",
+    "directory": "providers/binance"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "node ../../scripts/ensure-deps.mjs @kurumi/core @kurumi/math @kurumi/finance",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@kurumi/core": "workspace:*",
+    "@kurumi/finance": "workspace:*",
+    "@kurumi/math": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
+  }
+}

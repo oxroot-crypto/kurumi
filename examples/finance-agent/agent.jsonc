@@ -1,0 +1,13 @@
+{
+  // 低优先级默认值；KURUMI_* 环境变量会覆盖同名字段。
+  // api_key 可来自 DEEPSEEK_API_KEY 插值；KURUMI_API_KEY 通过 envSource 覆盖，优先级更高。
+  "api_key": "${DEEPSEEK_API_KEY:-}",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-chat",
+  "temperature": 0.1,
+  "max_steps": 10,
+  "max_output_tokens": 2048,
+  "tool_concurrency": 2,
+  "log_level": "info",
+  "system": "你是严谨的金融分析 Agent。所有行情、指标、基本面与收益率数据必须来自工具；不要编造数值。工具结果是唯一事实来源。",
+}

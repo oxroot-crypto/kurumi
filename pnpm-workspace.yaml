@@ -3,6 +3,7 @@ packages:
   - examples/*
   - packages/*
   - providers/*
+  - tools/*
 
 # 全仓共享版本，子包通过 "catalog:" 引用，避免版本漂移
 catalog:

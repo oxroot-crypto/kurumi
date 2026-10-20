@@ -1,7 +1,7 @@
 # @kurumi/core 形式化契约
 
-> 版本：0.1.0  
-> 范围：`packages/core/src` 的错误基类、JSON 值与错误序列化、RuntimeHost 抽象与内存/Node 宿主。  
+> 版本：0.1.0\
+> 范围：`packages/core/src` 的错误基类、通用边界校验、JSON 值与错误序列化、RuntimeHost 抽象与内存/Node 宿主。\
 > 判定：本包是跨包基础设施，属于「对外契约类模块」；涉及正确性、安全与资源边界的推荐项按强制处理。
 
 ## 1. 适用范围与豁免判定
@@ -72,6 +72,14 @@ SerializedError = { name, message, stack?, cause?, errors?, [key: string]: JsonV
 | `FC-CORE-ERR-007`  | 序列化循环引用 / 超深嵌套 | 输出 `[Circular]` / `[MaxDepth]`，不抛栈溢出    |
 | `FC-CORE-ERR-008`  | 序列化选项越界            | `KurumiError('invalid_options')`                |
 
+### 3.4 通用边界校验
+
+| 编号                | 约束                                                                                                                                           | 失败语义                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `FC-CORE-VALID-001` | 提供字符串、非空白字符串、正则、非负/正安全整数、时间戳、有限数、布尔、封闭字符串集合、普通对象、数组长度与闭区间校验；闭区间拒绝 `NaN`/无穷。 | 缺省抛 `CoreValidationError` |
+| `FC-CORE-VALID-002` | 每个校验函数接受可选 `ValidationErrorFactory`；领域包可据此映射为 `FinanceDefinitionError`、`MathDefinitionError` 等领域错误。                 | —                            |
+| `FC-CORE-VALID-003` | `describeValue` 对任意值输出最多 80 字符描述；不得因 `String()` 抛错或泄漏超长输入。                                                           | —                            |
+
 ## 4. 追溯矩阵
 
 | 约束                                                                | 测试文件 / 用例                                                                                                                                     |
@@ -90,6 +98,7 @@ SerializedError = { name, message, stack?, cause?, errors?, [key: string]: JsonV
 | `I-CORE-004`                                                        | `src/architecture.test.ts` · 核心代码不直接依赖 node:；`packages/config/src/architecture.test.ts`、`packages/log/src/architecture.test.ts` 交叉校验 |
 | `I-CORE-007`                                                        | `src/serialize.test.ts` · 危险键、循环引用与 JSON 安全输出                                                                                          |
 | `PBT-CORE-001`                                                      | `src/properties.test.ts` · 任意 JSON 值的克隆/自反/可序列化属性                                                                                     |
+| `FC-CORE-VALID-*`                                                   | `src/validation.test.ts` · 字符串/数值/集合/对象校验、自定义错误工厂与描述截断                                                                      |
 
 ## 5. 兼容性与演进
 
@@ -99,4 +108,5 @@ SerializedError = { name, message, stack?, cause?, errors?, [key: string]: JsonV
 - 错误码、`MAX_JSON_DEPTH`、危险键集合、序列化占位符（`[Circular]` / `[MaxDepth]` / `[truncated]`）是对外契约；调整视为破坏性变更。
 - 新增 `toJsonSafeValue` / `serializeError` 属于非破坏性扩展；新增可选序列化选项必须提供缺省值。
 - 新增 `isAbortSignal` / `isAbortError` 属于非破坏性扩展，供各包统一取消判定。
+- 新增通用 `validation` 导出属于非破坏性扩展；各包可注入领域错误工厂，缺省行为抛 `CoreValidationError`。
 - 新增可选宿主方法必须提供缺省行为，不得要求现有实现同步修改。

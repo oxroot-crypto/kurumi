@@ -23,7 +23,7 @@
     "changeset": "changeset",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "oxlint packages providers examples test-utils scripts vitest.shared.ts",
+    "lint": "oxlint packages providers tools examples test-utils scripts vitest.shared.ts",
     "preview": "pnpm -r --parallel --if-present run preview",
     "release": "pnpm build && changeset publish",
     "typecheck": "pnpm -r --if-present run typecheck",

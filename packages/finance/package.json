@@ -1,0 +1,48 @@
+{
+  "name": "@kurumi/finance",
+  "version": "0.1.0",
+  "description": "Kurumi 跨 runtime 金融基础设施：固定精度小数、货币/金额、跨资产标的、行情、订单、持仓、组合、FX、期权与风控",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxroot-crypto/kurumi",
+    "directory": "packages/finance"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "node ../../scripts/ensure-deps.mjs @kurumi/core @kurumi/math",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@kurumi/core": "workspace:*",
+    "@kurumi/math": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "fast-check": "catalog:",
+    "vitest": "catalog:"
+  }
+}

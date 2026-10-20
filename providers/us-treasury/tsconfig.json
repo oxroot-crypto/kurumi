@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@kurumi/core": ["../../packages/core/src/index.ts"],
+      "@kurumi/math": ["../../packages/math/src/index.ts"],
+      "@kurumi/finance": ["../../packages/finance/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

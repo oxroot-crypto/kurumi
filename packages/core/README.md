@@ -44,6 +44,21 @@ interface RuntimeHost {
 - `readTextFile` 接受可选 `AbortSignal`；文件不存在时必须抛出 `FileNotFoundError`，其他读取失败应包装为 `RuntimeHostError`（code 固定为 `runtime_host_error`）。
 - 上层可以基于该接口实现浏览器 `fetch` 宿主、Deno/Bun 宿主或测试内存宿主。
 
+## 通用边界校验
+
+`@kurumi/core` 提供与领域无关的入口校验：`assertString`、`assertNonEmptyString`、`assertPattern`、`assertSafeInteger`、`assertPositiveSafeInteger`、`assertTimestampMs`、`assertFiniteNumber`、`assertBoolean`、`assertOneOf`、`assertPlainObject`、`assertArrayMaxLength`、`assertRange` 与 `describeValue`。
+
+所有校验函数接受可选的 `ValidationErrorFactory`，领域包可以把自己的错误类型注入进来：
+
+```ts
+import { assertNonEmptyString, type ValidationErrorFactory } from '@kurumi/core';
+
+const financeError: ValidationErrorFactory = (message) => new FinanceError(message);
+assertNonEmptyString('BTC/USDT', 'instrument.symbol', financeError);
+```
+
+缺省失败抛 `CoreValidationError`（code `core_validation_error`）。
+
 ## 取消判定
 
 `isAbortSignal(value)` 与 `isAbortError(value)` 提供跨 realm 的结构化判断：前者识别 `AbortSignal` 形状，后者识别 `AbortError` / `ABORT_ERR`，供 Host、config 与 agent 复用。
