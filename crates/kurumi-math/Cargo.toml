@@ -1,0 +1,17 @@
+[package]
+name = "kurumi-math"
+description = "Numerical methods for Kurumi: interpolation, root finding, random number generation, statistics, and linear algebra."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+kurumi-core = { workspace = true }
+
+[lints]
+workspace = true

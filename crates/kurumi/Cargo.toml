@@ -1,0 +1,31 @@
+[package]
+name = "kurumi"
+description = "Kurumi facade: feature-gated re-exports of the workspace crates and the home of the Python and WebAssembly bindings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+kurumi-core = { workspace = true, optional = true }
+kurumi-math = { workspace = true, optional = true }
+kurumi-ta = { workspace = true, optional = true }
+kurumi-pricing = { workspace = true, optional = true }
+kurumi-risk = { workspace = true, optional = true }
+kurumi-backtest = { workspace = true, optional = true }
+
+[features]
+default = ["core", "math", "ta", "pricing", "risk", "backtest"]
+core = ["dep:kurumi-core"]
+math = ["core", "dep:kurumi-math"]
+ta = ["math", "dep:kurumi-ta"]
+pricing = ["math", "dep:kurumi-pricing"]
+risk = ["ta", "pricing", "dep:kurumi-risk"]
+backtest = ["risk", "dep:kurumi-backtest"]
+
+[lints]
+workspace = true

@@ -1,0 +1,21 @@
+[package]
+name = "kurumi-backtest"
+description = "Strategy backtesting for Kurumi: order-book matching simulation, slippage and fee models, and account/position tracking."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+kurumi-core = { workspace = true }
+kurumi-math = { workspace = true }
+kurumi-ta = { workspace = true }
+kurumi-pricing = { workspace = true }
+kurumi-risk = { workspace = true }
+
+[lints]
+workspace = true
