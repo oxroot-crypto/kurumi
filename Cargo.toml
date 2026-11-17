@@ -1,0 +1,57 @@
+# Kurumi workspace root.
+#
+# Member crates inherit shared package metadata from `[workspace.package]` and
+# dependency versions from `[workspace.dependencies]`. Member manifests must use
+# `field.workspace = true` / `{ workspace = true }` instead of hard-coding
+# versions, so the whole workspace moves together.
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/kurumi-core",
+    "crates/kurumi-math",
+    "crates/kurumi-ta",
+    "crates/kurumi-pricing",
+    "crates/kurumi-risk",
+    "crates/kurumi-backtest",
+    "crates/kurumi",
+]
+default-members = ["crates/kurumi"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["oxroot-crypto"]
+license = "Unlicense"
+repository = "https://github.com/oxroot-crypto/kurumi"
+keywords = [
+    "finance",
+    "quantitative-finance",
+    "trading",
+    "derivatives",
+    "technical-analysis",
+]
+categories = ["finance", "mathematics"]
+
+[workspace.dependencies]
+# Internal crates. Always refer to them through the workspace so every member
+# resolves the same path and version.
+kurumi-core = { version = "0.1.0", path = "crates/kurumi-core" }
+kurumi-math = { version = "0.1.0", path = "crates/kurumi-math" }
+kurumi-ta = { version = "0.1.0", path = "crates/kurumi-ta" }
+kurumi-pricing = { version = "0.1.0", path = "crates/kurumi-pricing" }
+kurumi-risk = { version = "0.1.0", path = "crates/kurumi-risk" }
+kurumi-backtest = { version = "0.1.0", path = "crates/kurumi-backtest" }
+
+# External crates. Versions are centrally managed here; members inherit them and
+# may only add feature flags on their own manifest.
+rust_decimal = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+approx = "0.5"
+rand = "0.9"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"

@@ -1,0 +1,18 @@
+[package]
+name = "kurumi-pricing"
+description = "Asset and derivative pricing for Kurumi: cashflows, yield curves, bonds, and option pricing engines."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+kurumi-core = { workspace = true }
+kurumi-math = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,20 @@
+[package]
+name = "kurumi-risk"
+description = "Risk and performance analytics for Kurumi: VaR, CVaR, Greeks aggregation, Sharpe ratio, and drawdowns."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+kurumi-core = { workspace = true }
+kurumi-math = { workspace = true }
+kurumi-ta = { workspace = true }
+kurumi-pricing = { workspace = true }
+
+[lints]
+workspace = true
