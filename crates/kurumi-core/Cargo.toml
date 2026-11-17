@@ -10,5 +10,12 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[dependencies]
+rust_decimal = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
 [lints]
 workspace = true
