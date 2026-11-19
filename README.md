@@ -19,7 +19,7 @@ backtesting tooling can be used together or independently.
 
 The facade enables the whole library by default. Individual layers can be
 selected with Cargo features (`core`, `math`, `ta`, `pricing`, `risk`,
-`backtest`).
+`backtest`), and `full` enables them all.
 
 ## Building
 

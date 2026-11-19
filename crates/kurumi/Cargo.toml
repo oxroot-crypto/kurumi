@@ -18,14 +18,19 @@ kurumi-pricing = { workspace = true, optional = true }
 kurumi-risk = { workspace = true, optional = true }
 kurumi-backtest = { workspace = true, optional = true }
 
+[dev-dependencies]
+approx = { workspace = true }
+rust_decimal = { workspace = true }
+
 [features]
-default = ["core", "math", "ta", "pricing", "risk", "backtest"]
+default = ["full"]
 core = ["dep:kurumi-core"]
 math = ["core", "dep:kurumi-math"]
 ta = ["math", "dep:kurumi-ta"]
 pricing = ["math", "dep:kurumi-pricing"]
 risk = ["ta", "pricing", "dep:kurumi-risk"]
 backtest = ["risk", "dep:kurumi-backtest"]
+full = ["core", "math", "ta", "pricing", "risk", "backtest"]
 
 [lints]
 workspace = true

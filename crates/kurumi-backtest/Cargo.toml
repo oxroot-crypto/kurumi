@@ -16,6 +16,10 @@ kurumi-math = { workspace = true }
 kurumi-ta = { workspace = true }
 kurumi-pricing = { workspace = true }
 kurumi-risk = { workspace = true }
+rust_decimal = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
 
 [lints]
 workspace = true
