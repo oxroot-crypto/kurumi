@@ -210,8 +210,10 @@ dependencies = [
 name = "kurumi-pricing"
 version = "0.1.0"
 dependencies = [
+ "approx",
  "kurumi-core",
  "kurumi-math",
+ "rust_decimal",
 ]
 
 [[package]]
