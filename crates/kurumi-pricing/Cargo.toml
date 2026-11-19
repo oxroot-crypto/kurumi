@@ -13,6 +13,10 @@ categories.workspace = true
 [dependencies]
 kurumi-core = { workspace = true }
 kurumi-math = { workspace = true }
+rust_decimal = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
 
 [lints]
 workspace = true
