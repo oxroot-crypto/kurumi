@@ -1,7 +1,7 @@
-//! Multi-asset data alignment, portfolio performance analytics, and risk
-//! decomposition.
+//! Multi-asset data alignment, portfolio optimization, performance analytics,
+//! and rebalancing.
 //!
-//! The crate is built around three stages:
+//! The crate is built around five stages:
 //!
 //! 1. [`panel`] aligns independently observed price or return series onto a
 //!    common time axis and turns them into a `(T, N)` [`ReturnMatrix`]: rows are
@@ -9,7 +9,13 @@
 //! 2. [`analytics`] validates portfolio weights and computes expected return,
 //!    volatility, annualized Sharpe ratio, diversification ratio, Euler risk
 //!    contributions, and parametric or historical portfolio VaR/CVaR.
-//! 3. [`rolling`] projects rolling betas and correlations against a benchmark
+//! 3. [`optimize`] solves constrained allocations with equal-weight,
+//!    inverse-volatility, mean-variance (GMV, target return, maximum Sharpe, and
+//!    the efficient frontier), risk-parity, and hierarchical risk-parity
+//!    strategies.
+//! 4. [`rebalance`] turns a target allocation and current `Decimal` holdings
+//!    into buy and sell trade suggestions.
+//! 5. [`rolling`] projects rolling betas and correlations against a benchmark
 //!    column of a return matrix.
 //!
 //! Multi-asset matrices follow the workspace convention: all return matrices
@@ -64,7 +70,9 @@
 )]
 
 pub mod analytics;
+pub mod optimize;
 pub mod panel;
+pub mod rebalance;
 pub mod rolling;
 
 pub use analytics::{
@@ -72,7 +80,13 @@ pub use analytics::{
     diversification_ratio, historical_portfolio_var, parametric_portfolio_var,
     portfolio_expected_return, portfolio_volatility, risk_decomposition,
 };
+pub use optimize::{
+    EqualRiskContribution, EqualWeight, GlobalMinVariance, HierarchicalRiskParity, HrpLinkage,
+    InverseVolatility, MaxSharpe, OptimizationConstraints, OptimizationResult, PortfolioOptimizer,
+    TargetReturn, efficient_frontier,
+};
 pub use panel::{AlignmentPolicy, AssetSeries, ReturnMatrix, ReturnMethod};
+pub use rebalance::{Holding, RebalanceAction, RebalanceSide, generate_rebalance_actions};
 pub use rolling::{
     RollingBetaPanel, RollingPanel, rolling_beta_and_correlation, rolling_betas,
     rolling_correlations,
@@ -88,3 +102,7 @@ pub use kurumi_core::KurumiError;
 /// The `nalgebra` crate, re-exported for the matrix and vector types in the
 /// public API.
 pub use nalgebra;
+
+/// The `rust_decimal` crate, re-exported for the [`Decimal`](rust_decimal::Decimal)
+/// amounts used by the rebalancing API.
+pub use rust_decimal;
