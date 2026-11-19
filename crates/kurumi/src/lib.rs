@@ -122,11 +122,15 @@ pub mod prelude {
 
     #[cfg(feature = "portfolio")]
     pub use kurumi_portfolio::{
-        AlignmentPolicy, AssetSeries, PortfolioVar, PortfolioWeights, ReturnMatrix, ReturnMethod,
-        RiskDecomposition, RollingBetaPanel, RollingPanel, annualized_sharpe_ratio,
-        diversification_ratio, historical_portfolio_var, parametric_portfolio_var,
-        portfolio_expected_return, portfolio_volatility, risk_decomposition,
-        rolling_beta_and_correlation, rolling_betas, rolling_correlations,
+        AlignmentPolicy, AssetSeries, EqualRiskContribution, EqualWeight, GlobalMinVariance,
+        HierarchicalRiskParity, Holding, HrpLinkage, InverseVolatility, MaxSharpe,
+        OptimizationConstraints, OptimizationResult, PortfolioOptimizer, PortfolioVar,
+        PortfolioWeights, RebalanceAction, RebalanceSide, ReturnMatrix, ReturnMethod,
+        RiskDecomposition, RollingBetaPanel, RollingPanel, TargetReturn, annualized_sharpe_ratio,
+        diversification_ratio, efficient_frontier, generate_rebalance_actions,
+        historical_portfolio_var, parametric_portfolio_var, portfolio_expected_return,
+        portfolio_volatility, risk_decomposition, rolling_beta_and_correlation, rolling_betas,
+        rolling_correlations,
     };
 
     #[cfg(feature = "backtest")]

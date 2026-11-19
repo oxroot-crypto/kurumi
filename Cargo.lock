@@ -237,6 +237,7 @@ dependencies = [
  "kurumi-math",
  "kurumi-risk",
  "nalgebra",
+ "rust_decimal",
 ]
 
 [[package]]
