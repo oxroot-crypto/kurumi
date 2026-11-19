@@ -17,8 +17,11 @@ use kurumi_ta::{
 };
 use proptest::prelude::*;
 
-/// A random draw tolerance for `f64` accumulation drift.
-const TOLERANCE: f64 = 1e-9;
+/// A random draw tolerance for `f64` accumulation drift. The incremental WMA
+/// update can accumulate one-ulp-scale error when a window of large values
+/// cancels to a near-zero mean, so the tolerance is one order of magnitude
+/// above the machine-level relative error.
+const TOLERANCE: f64 = 1e-8;
 
 fn finite_prices() -> impl Strategy<Value = Vec<f64>> {
     prop::collection::vec(-1.0e6..1.0e6_f64, 1..160)
