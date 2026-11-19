@@ -804,6 +804,45 @@ mod tests {
     }
 
     #[test]
+    fn ring_buffer_never_reallocates_while_evicting() {
+        let mut buffer = RingBuffer::new(8).expect("positive capacity");
+        let reserved = buffer.values.capacity();
+        for index in 0..10_000 {
+            buffer.push(index as f64);
+        }
+        assert_eq!(buffer.values.capacity(), reserved);
+    }
+
+    #[test]
+    fn rolling_window_deques_never_reallocate_while_evicting() {
+        let mut window = RollingWindow::new(8).expect("positive capacity");
+        let buffer_capacity = window.buffer.values.capacity();
+        let minima_capacity = window.minima.capacity();
+        let maxima_capacity = window.maxima.capacity();
+        for index in 0..10_000 {
+            let value = if index % 17 == 0 {
+                -1.0e6
+            } else {
+                (index % 97) as f64
+            };
+            window.push(value).expect("finite value");
+        }
+        assert_eq!(window.buffer.values.capacity(), buffer_capacity);
+        assert_eq!(window.minima.capacity(), minima_capacity);
+        assert_eq!(window.maxima.capacity(), maxima_capacity);
+    }
+
+    #[test]
+    fn rolling_variance_never_reallocates_while_evicting() {
+        let mut window = RollingVariance::new(8).expect("positive capacity");
+        let reserved = window.buffer.values.capacity();
+        for index in 0..10_000 {
+            window.push((index % 97) as f64).expect("finite value");
+        }
+        assert_eq!(window.buffer.values.capacity(), reserved);
+    }
+
+    #[test]
     fn rolling_window_tracks_mean_min_and_max_incrementally() {
         let mut window = RollingWindow::new(3).expect("positive capacity");
         for value in [1.0, 4.0, 2.0] {
