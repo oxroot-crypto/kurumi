@@ -11,6 +11,9 @@
 //!   Expected Shortfall.
 //! - [`sizing`] provides the Kelly criterion and a volatility-target position
 //!   calculator.
+//! - [`relative`] provides benchmark-relative metrics: beta, conditional betas,
+//!   Jensen's alpha, tracking error, information and Treynor ratios, and
+//!   capture ratios.
 //!
 //! All public functions consume finite `f64` inputs, reject `NaN` and infinite
 //! values at the boundary, and return the shared [`KurumiError`] type.
@@ -41,6 +44,7 @@
 )]
 
 pub mod metrics;
+pub mod relative;
 pub mod sizing;
 pub mod var;
 
@@ -48,6 +52,10 @@ pub use metrics::{
     DrawdownStats, MetricsConfig, PerformanceMetrics, annualized_return, annualized_volatility,
     calmar_ratio, drawdown_stats, max_drawdown, profit_loss_ratio, sharpe_ratio, sortino_ratio,
     total_return, win_rate,
+};
+pub use relative::{
+    CaptureRatios, beta, capture_ratios, downside_beta, information_ratio, jensen_alpha,
+    tracking_error, treynor_ratio, upside_beta,
 };
 pub use sizing::{VolatilityTargetSizer, kelly_fraction, volatility_target_fraction};
 pub use var::{

@@ -1,6 +1,6 @@
 [package]
 name = "kurumi-math"
-description = "Numerical methods for Kurumi: interpolation, root finding, random number generation, statistics, and linear algebra."
+description = "Numerical methods for Kurumi: interpolation, root finding, random number generation, statistics, correlation and covariance estimation, regression, and linear algebra."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,6 +13,7 @@ categories.workspace = true
 [dependencies]
 kurumi-core = { workspace = true }
 libm = { workspace = true }
+nalgebra = { workspace = true }
 
 [dev-dependencies]
 approx = { workspace = true }

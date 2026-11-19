@@ -4,6 +4,9 @@
 //! pricing, risk, and indicator code:
 //!
 //! - [`interpolation`] — linear, log-linear, and natural cubic-spline curves;
+//! - [`multivariate`] — correlation, rolling correlation, and covariance
+//!   estimators;
+//! - [`regression`] — simple and SVD-based multiple ordinary least squares;
 //! - [`roots`] — safeguarded Brent brackets and Newton-Raphson iteration;
 //! - [`stats`] — standard normal CDF/PDF, sample moments, and covariance
 //!   matrices.
@@ -31,12 +34,19 @@
 )]
 
 pub mod interpolation;
+pub mod multivariate;
+pub mod regression;
 pub mod roots;
 pub mod stats;
 
 pub use interpolation::{
     CubicSplineInterpolator, Interpolator, LinearInterpolator, LogLinearInterpolator,
 };
+pub use multivariate::{
+    CovarianceEstimator, EwmaCovariance, LedoitWolfShrinkage, SampleCovariance, correlation_matrix,
+    pearson_correlation, rolling_correlation, spearman_correlation,
+};
+pub use regression::{MultipleRegressionResult, SimpleRegressionResult, ols_multiple, ols_simple};
 pub use roots::{RootFinderConfig, brent, newton_raphson};
 pub use stats::{
     covariance, covariance_matrix, mean, sample_std_dev, sample_variance, standard_normal_cdf,
