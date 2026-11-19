@@ -14,10 +14,10 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 | Crate | Responsibility |
 | --- | --- |
 | `kurumi-core` | Core primitives: money, high-precision numerics, calendars and day-count conventions, fixed-capacity ring buffers, the shared error type. |
-| `kurumi-math` | Numerical methods: interpolation, root finding, random number generation, statistics, linear algebra. |
+| `kurumi-math` | Numerical methods: interpolation, root finding, random number generation, statistics, correlation and covariance estimation, regression, linear algebra. |
 | `kurumi-ta` | Time series and technical indicators: candle structures, O(1) streaming incremental indicators, vectorized batch indicators. |
 | `kurumi-pricing` | Asset and derivative pricing: cashflows, yield curves, bonds, option pricing engines. |
-| `kurumi-risk` | Risk and performance analytics: VaR, CVaR, Greeks aggregation, Sharpe ratio and drawdowns. |
+| `kurumi-risk` | Risk and performance analytics: VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
 | `kurumi-backtest` | Strategy backtesting: order-book matching simulation, slippage and fee models, account/position tracking. |
 | `kurumi` | Top-level facade: re-exports the member crates behind Cargo features and hosts the Python/WASM bindings. |
 
@@ -75,7 +75,44 @@ explicit architectural decision recorded in the PR.
   features and must be thin adapters over the Rust API. Business logic never
   lives in binding code.
 
-## 4. Coding & Testing Standards
+## 4. Multi-Asset & Matrix Conventions
+
+These conventions are part of the public contract for every API that consumes
+multi-asset return data or returns matrices, including the multivariate
+statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
+
+- **Matrix orientation**: all multi-asset return matrices
+  (`nalgebra::DMatrix<f64>`) MUST use shape `(T, N)`, where rows `T` are
+  chronological time observations and columns `N` are assets. Never guess or
+  silently transpose an input; a function that accepts a matrix MUST document
+  the orientation it expects. Covariance and correlation matrices MUST be
+  `(N, N)` symmetric matrices.
+- **Degrees of freedom**: sample variance, covariance, and Pearson correlation
+  MUST use Bessel's correction (`ddof = 1`, dividing by `T - 1`) by default,
+  and MUST return `KurumiError::InsufficientData` when `T` is less than 2.
+  Regression residual standard errors use the residual degrees of freedom.
+  Model-based estimators such as EWMA and shrinkage covariance MUST document
+  their weighting and normalization convention instead of inheriting the sample
+  rule implicitly.
+- **Numerical stability**: validate covariance matrices for symmetry and
+  non-negative diagonals before consuming them. Clamp correlations to
+  `[-1.0, 1.0]` and pin correlation diagonals to exactly `1.0`. A zero-variance
+  series makes correlation, Beta, and regression slopes undefined: return a
+  typed `KurumiError` rather than letting `NaN` or infinity reach
+  correlation/Beta results.
+- **Input alignment**: multi-series APIs MUST reject inputs of unequal length
+  and non-finite values before computing. Callers align series (and perform any
+  forward-fill or resampling) explicitly; library code never hides it.
+- **Pure Rust solvers**: implement portfolio optimizers and multivariate
+  regressions in pure Rust using `nalgebra`, with no C/C++/Fortran FFI
+  dependency. Multivariate OLS MUST solve via SVD rather than the normal
+  equations so that collinear regressors stay numerically stable.
+- **Annualization**: benchmark-relative ratios conventionally quoted on an
+  annual basis (tracking error, information ratio, Treynor ratio) MUST take an
+  explicit `periods_per_year` and document the convention; per-period measures
+  such as Jensen's alpha MUST state that they are per-period.
+
+## 5. Coding & Testing Standards
 
 - Annotate hot-path math functions with `#[inline]`.
 - Document every public struct, trait, enum, function, and module with Rustdoc,
@@ -108,7 +145,7 @@ explicit architectural decision recorded in the PR.
 - New public APIs require Rustdoc and tests in the same change. Do not commit
   commented-out code or dead modules.
 
-## 5. Dependency Management
+## 6. Dependency Management
 
 - Declare every external dependency version once in `[workspace.dependencies]`
   in the root `Cargo.toml`. Member manifests inherit it with
@@ -122,7 +159,7 @@ explicit architectural decision recorded in the PR.
   `kurumi-core` or `kurumi-math` instead.
 - Keep `Cargo.lock` committed so workspace builds are reproducible.
 
-## 6. Definition of Done
+## 7. Definition of Done
 
 A change is complete only when:
 
