@@ -1,0 +1,24 @@
+[package]
+name = "kurumi-portfolio"
+description = "Multi-asset panels, portfolio performance analytics, and risk decomposition for Kurumi."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+kurumi-core = { workspace = true }
+kurumi-math = { workspace = true }
+kurumi-risk = { workspace = true }
+chrono = { workspace = true }
+nalgebra = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
+[lints]
+workspace = true

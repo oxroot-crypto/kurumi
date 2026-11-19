@@ -13,6 +13,7 @@ members = [
     "crates/kurumi-ta",
     "crates/kurumi-pricing",
     "crates/kurumi-risk",
+    "crates/kurumi-portfolio",
     "crates/kurumi-backtest",
     "crates/kurumi",
 ]
@@ -42,6 +43,7 @@ kurumi-math = { version = "0.1.0", path = "crates/kurumi-math" }
 kurumi-ta = { version = "0.1.0", path = "crates/kurumi-ta" }
 kurumi-pricing = { version = "0.1.0", path = "crates/kurumi-pricing" }
 kurumi-risk = { version = "0.1.0", path = "crates/kurumi-risk" }
+kurumi-portfolio = { version = "0.1.0", path = "crates/kurumi-portfolio" }
 kurumi-backtest = { version = "0.1.0", path = "crates/kurumi-backtest" }
 
 # External crates. Versions are centrally managed here; members inherit them and
@@ -50,6 +52,7 @@ rust_decimal = "1"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 approx = "0.5"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 libm = "0.2"
 nalgebra = "0.33"
 proptest = "1"

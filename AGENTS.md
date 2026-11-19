@@ -18,6 +18,7 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 | `kurumi-ta` | Time series and technical indicators: candle structures, O(1) streaming incremental indicators, vectorized batch indicators. |
 | `kurumi-pricing` | Asset and derivative pricing: cashflows, yield curves, bonds, option pricing engines. |
 | `kurumi-risk` | Risk and performance analytics: VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
+| `kurumi-portfolio` | Multi-asset panel alignment, return matrices, portfolio performance and risk decomposition, rolling beta/correlation panels. |
 | `kurumi-backtest` | Strategy backtesting: order-book matching simulation, slippage and fee models, account/position tracking. |
 | `kurumi` | Top-level facade: re-exports the member crates behind Cargo features and hosts the Python/WASM bindings. |
 
@@ -26,13 +27,14 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 Dependencies flow in one direction only:
 
 ```text
-kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-backtest  <  kurumi
+kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-portfolio / kurumi-backtest  <  kurumi
 ```
 
 A crate may depend only on crates that appear earlier in this list. `kurumi-ta`
-and `kurumi-pricing` are peers: neither may depend on the other. `kurumi-core`
-has no workspace dependencies. The `kurumi` facade depends on every member
-crate, and no member may depend on the facade.
+and `kurumi-pricing` are peers: neither may depend on the other, and
+`kurumi-portfolio` and `kurumi-backtest` are peers above `kurumi-risk`.
+`kurumi-core` has no workspace dependencies. The `kurumi` facade depends on
+every member crate, and no member may depend on the facade.
 
 Crate boundaries are part of the public architecture: do not merge crates,
 introduce a new crate, or add an edge that reverses the layering without an
@@ -40,7 +42,7 @@ explicit architectural decision recorded in the PR.
 
 ## 3. Architectural Invariants
 
-- **Workspace structure**: maintain the seven crates and the one-way layering
+- **Workspace structure**: maintain the eight crates and the one-way layering
   above. No dependency cycles.
 - **Dual numerical precision**:
   - Use `rust_decimal::Decimal` for currency amounts, ledger accounting, order
@@ -67,10 +69,10 @@ explicit architectural decision recorded in the PR.
   any unavoidable exception needs a scoped `#[allow(unsafe_code)]`, a `// SAFETY:`
   comment covering every invariant, and review justification.
 - **Facade features**: `kurumi` exposes each member behind an additive feature
-  (`core`, `math`, `ta`, `pricing`, `risk`, `backtest`). Features are additive:
-  enabling one must not break another, and lower-layer features are implied by
-  higher-layer ones. Default features enable the whole library. Keep the
-  feature graph in sync with the crate layering.
+  (`core`, `math`, `ta`, `pricing`, `risk`, `portfolio`, `backtest`). Features
+  are additive: enabling one must not break another, and lower-layer features
+  are implied by higher-layer ones. Default features enable the whole library.
+  Keep the feature graph in sync with the crate layering.
 - **Bindings**: Python/WASM bindings live in `kurumi` behind dedicated opt-in
   features and must be thin adapters over the Rust API. Business logic never
   lives in binding code.

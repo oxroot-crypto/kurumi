@@ -99,6 +99,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
+name = "chrono"
+version = "0.4.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -179,6 +188,7 @@ dependencies = [
  "kurumi-backtest",
  "kurumi-core",
  "kurumi-math",
+ "kurumi-portfolio",
  "kurumi-pricing",
  "kurumi-risk",
  "kurumi-ta",
@@ -214,6 +224,18 @@ dependencies = [
  "approx",
  "kurumi-core",
  "libm",
+ "nalgebra",
+]
+
+[[package]]
+name = "kurumi-portfolio"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "chrono",
+ "kurumi-core",
+ "kurumi-math",
+ "kurumi-risk",
  "nalgebra",
 ]
 
