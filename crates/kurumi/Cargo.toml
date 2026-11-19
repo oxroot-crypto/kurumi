@@ -16,6 +16,7 @@ kurumi-math = { workspace = true, optional = true }
 kurumi-ta = { workspace = true, optional = true }
 kurumi-pricing = { workspace = true, optional = true }
 kurumi-risk = { workspace = true, optional = true }
+kurumi-portfolio = { workspace = true, optional = true }
 kurumi-backtest = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -29,8 +30,9 @@ math = ["core", "dep:kurumi-math"]
 ta = ["math", "dep:kurumi-ta"]
 pricing = ["math", "dep:kurumi-pricing"]
 risk = ["ta", "pricing", "dep:kurumi-risk"]
+portfolio = ["risk", "dep:kurumi-portfolio"]
 backtest = ["risk", "dep:kurumi-backtest"]
-full = ["core", "math", "ta", "pricing", "risk", "backtest"]
+full = ["core", "math", "ta", "pricing", "risk", "portfolio", "backtest"]
 
 [lints]
 workspace = true

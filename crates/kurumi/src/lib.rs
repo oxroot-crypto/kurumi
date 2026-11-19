@@ -9,6 +9,7 @@
 //! | `ta` | `kurumi::ta` | `kurumi-ta` |
 //! | `pricing` | `kurumi::pricing` | `kurumi-pricing` |
 //! | `risk` | `kurumi::risk` | `kurumi-risk` |
+//! | `portfolio` | `kurumi::portfolio` | `kurumi-portfolio` |
 //! | `backtest` | `kurumi::backtest` | `kurumi-backtest` |
 //! | `full` | all of the above | every member crate |
 //!
@@ -56,6 +57,9 @@ pub use kurumi_pricing as pricing;
 
 #[cfg(feature = "risk")]
 pub use kurumi_risk as risk;
+
+#[cfg(feature = "portfolio")]
+pub use kurumi_portfolio as portfolio;
 
 #[cfg(feature = "backtest")]
 pub use kurumi_backtest as backtest;
@@ -114,6 +118,15 @@ pub mod prelude {
         historical_var, kelly_fraction, max_drawdown, parametric_expected_shortfall,
         parametric_var, profit_loss_ratio, sharpe_ratio, sortino_ratio, total_return,
         volatility_target_fraction, win_rate,
+    };
+
+    #[cfg(feature = "portfolio")]
+    pub use kurumi_portfolio::{
+        AlignmentPolicy, AssetSeries, PortfolioVar, PortfolioWeights, ReturnMatrix, ReturnMethod,
+        RiskDecomposition, RollingBetaPanel, RollingPanel, annualized_sharpe_ratio,
+        diversification_ratio, historical_portfolio_var, parametric_portfolio_var,
+        portfolio_expected_return, portfolio_volatility, risk_decomposition,
+        rolling_beta_and_correlation, rolling_betas, rolling_correlations,
     };
 
     #[cfg(feature = "backtest")]

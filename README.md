@@ -14,12 +14,13 @@ backtesting tooling can be used together or independently.
 | `kurumi-ta` | Candle structures plus O(1) streaming and vectorized batch technical indicators. |
 | `kurumi-pricing` | Cashflows, yield curves, bonds, and option pricing engines. |
 | `kurumi-risk` | VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
+| `kurumi-portfolio` | Multi-asset panel alignment, return matrices, portfolio performance, risk decomposition, and rolling beta/correlation panels. |
 | `kurumi-backtest` | Order-book matching simulation, slippage and fee models, and position tracking. |
 | `kurumi` | Facade crate with feature-gated re-exports and the Python/WASM bindings. |
 
 The facade enables the whole library by default. Individual layers can be
 selected with Cargo features (`core`, `math`, `ta`, `pricing`, `risk`,
-`backtest`), and `full` enables them all.
+`portfolio`, `backtest`), and `full` enables them all.
 
 ## Building
 
