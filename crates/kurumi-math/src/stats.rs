@@ -335,7 +335,7 @@ fn covariance_with_means(
     }
 }
 
-fn compensated_sum<I>(values: I) -> Result<f64, KurumiError>
+pub(crate) fn compensated_sum<I>(values: I) -> Result<f64, KurumiError>
 where
     I: Iterator<Item = f64>,
 {

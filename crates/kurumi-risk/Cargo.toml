@@ -1,6 +1,6 @@
 [package]
 name = "kurumi-risk"
-description = "Risk and performance analytics for Kurumi: VaR, CVaR, Greeks aggregation, Sharpe ratio, and drawdowns."
+description = "Risk and performance analytics for Kurumi: VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

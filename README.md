@@ -10,10 +10,10 @@ backtesting tooling can be used together or independently.
 | Crate | Responsibility |
 | --- | --- |
 | `kurumi-core` | Money, high-precision numerics, calendars, day-count conventions, fixed-capacity ring buffers, and the shared error type. |
-| `kurumi-math` | Interpolation, root finding, random number generation, statistics, and linear algebra. |
+| `kurumi-math` | Interpolation, root finding, random number generation, statistics, correlation and covariance estimation, regression, and linear algebra. |
 | `kurumi-ta` | Candle structures plus O(1) streaming and vectorized batch technical indicators. |
 | `kurumi-pricing` | Cashflows, yield curves, bonds, and option pricing engines. |
-| `kurumi-risk` | VaR, CVaR, Greeks aggregation, Sharpe ratio, and drawdowns. |
+| `kurumi-risk` | VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
 | `kurumi-backtest` | Order-book matching simulation, slippage and fee models, and position tracking. |
 | `kurumi` | Facade crate with feature-gated re-exports and the Python/WASM bindings. |
 

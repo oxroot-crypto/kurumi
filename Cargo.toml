@@ -51,6 +51,7 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 approx = "0.5"
 libm = "0.2"
+nalgebra = "0.33"
 proptest = "1"
 rand = "0.9"
 
