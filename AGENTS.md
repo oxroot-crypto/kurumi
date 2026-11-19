@@ -13,7 +13,7 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 
 | Crate | Responsibility |
 | --- | --- |
-| `kurumi-core` | Core primitives: money, high-precision numerics, calendars and day-count conventions, the shared error type. |
+| `kurumi-core` | Core primitives: money, high-precision numerics, calendars and day-count conventions, fixed-capacity ring buffers, the shared error type. |
 | `kurumi-math` | Numerical methods: interpolation, root finding, random number generation, statistics, linear algebra. |
 | `kurumi-ta` | Time series and technical indicators: candle structures, O(1) streaming incremental indicators, vectorized batch indicators. |
 | `kurumi-pricing` | Asset and derivative pricing: cashflows, yield curves, bonds, option pricing engines. |

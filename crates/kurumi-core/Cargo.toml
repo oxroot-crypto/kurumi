@@ -1,6 +1,6 @@
 [package]
 name = "kurumi-core"
-description = "Core primitives for Kurumi: money, high-precision numerics, calendars, day-count conventions, and the shared error type."
+description = "Core primitives for Kurumi: money, high-precision numerics, calendars, day-count conventions, fixed-capacity ring buffers, and the shared error type."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

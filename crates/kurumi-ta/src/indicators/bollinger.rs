@@ -2,8 +2,8 @@
 
 use kurumi_core::KurumiError;
 
-use crate::ring_buffer::RollingVariance;
 use crate::traits::StreamingIndicator;
+use kurumi_core::ring_buffer::RollingVariance;
 
 /// The middle, upper, and lower bands at one observation.
 ///

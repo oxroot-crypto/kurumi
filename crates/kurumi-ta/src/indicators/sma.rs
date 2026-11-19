@@ -2,8 +2,8 @@
 
 use kurumi_core::KurumiError;
 
-use crate::ring_buffer::RollingWindow;
 use crate::traits::StreamingIndicator;
+use kurumi_core::ring_buffer::RollingWindow;
 
 /// The simple moving average over a fixed window.
 ///

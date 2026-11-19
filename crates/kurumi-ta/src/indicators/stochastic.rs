@@ -4,8 +4,8 @@ use kurumi_core::KurumiError;
 
 use crate::bar::OhlcvBar;
 use crate::indicators::Sma;
-use crate::ring_buffer::RollingWindow;
 use crate::traits::StreamingIndicator;
+use kurumi_core::ring_buffer::RollingWindow;
 
 /// The `%K` and `%D` values of the stochastic oscillator at one candle.
 ///

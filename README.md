@@ -9,7 +9,7 @@ backtesting tooling can be used together or independently.
 
 | Crate | Responsibility |
 | --- | --- |
-| `kurumi-core` | Money, high-precision numerics, calendars, day-count conventions, and the shared error type. |
+| `kurumi-core` | Money, high-precision numerics, calendars, day-count conventions, fixed-capacity ring buffers, and the shared error type. |
 | `kurumi-math` | Interpolation, root finding, random number generation, statistics, and linear algebra. |
 | `kurumi-ta` | Candle structures plus O(1) streaming and vectorized batch technical indicators. |
 | `kurumi-pricing` | Cashflows, yield curves, bonds, and option pricing engines. |

@@ -10,6 +10,10 @@
 //! documented tolerance. This crate sits above `kurumi-core` and `kurumi-math`,
 //! and below `kurumi-risk`, `kurumi-backtest`, and the `kurumi` facade.
 //!
+//! The fixed-capacity [`RingBuffer`], [`RollingWindow`], and [`RollingVariance`]
+//! primitives live in `kurumi-core` and are re-exported here, so the indicators
+//! and the other crates share one implementation of their `O(1)` storage.
+//!
 //! # Streaming contract
 //!
 //! Every indicator implements [`StreamingIndicator`]. A call to
@@ -52,7 +56,6 @@
 
 pub mod bar;
 pub mod indicators;
-pub mod ring_buffer;
 pub mod traits;
 
 mod util;
@@ -62,7 +65,7 @@ pub use indicators::{
     Atr, BollingerBands, BollingerBandsOutput, Ema, Macd, MacdOutput, Roc, Rsi, Sma, Stochastic,
     StochasticOutput, Wma,
 };
-pub use ring_buffer::{RingBuffer, RollingVariance, RollingWindow};
+pub use kurumi_core::ring_buffer::{RingBuffer, RollingVariance, RollingWindow};
 pub use traits::StreamingIndicator;
 
 pub use kurumi_core::KurumiError;

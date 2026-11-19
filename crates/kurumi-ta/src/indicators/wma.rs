@@ -2,9 +2,9 @@
 
 use kurumi_core::KurumiError;
 
-use crate::ring_buffer::RingBuffer;
 use crate::traits::StreamingIndicator;
 use crate::util::ensure_finite;
+use kurumi_core::ring_buffer::RingBuffer;
 
 /// The linearly weighted moving average.
 ///

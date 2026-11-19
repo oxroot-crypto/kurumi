@@ -10,9 +10,11 @@
 //!
 //! Indicators never scan their lookback window inside
 //! [`StreamingIndicator::next`](crate::StreamingIndicator::next): the window
-//! aggregates are maintained incrementally by the types in
-//! [`ring_buffer`](crate::ring_buffer). Warm-up returns `Ok(None)`; the first
-//! complete value is produced by the observation that finishes the window.
+//! aggregates are maintained incrementally by [`RingBuffer`](crate::RingBuffer),
+//! [`RollingWindow`](crate::RollingWindow), and
+//! [`RollingVariance`](crate::RollingVariance). Warm-up returns `Ok(None)`; the
+//! first complete value is produced by the observation that finishes the
+//! window.
 
 mod atr;
 mod bollinger;

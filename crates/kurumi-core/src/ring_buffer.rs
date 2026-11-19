@@ -14,17 +14,28 @@
 
 use std::collections::VecDeque;
 
-use kurumi_core::KurumiError;
+use crate::error::KurumiError;
 
-use crate::util::ensure_finite;
+/// Rejects `NaN` and infinite observations at a window boundary.
+#[inline]
+fn ensure_finite(value: f64, parameter: &'static str) -> Result<(), KurumiError> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        Err(KurumiError::InvalidParameter {
+            parameter,
+            reason: "must be finite".to_owned(),
+        })
+    }
+}
 
 /// A fixed-capacity FIFO ring buffer.
 ///
 /// The buffer stores at most `capacity` values. Once full, each push overwrites
-/// the oldest value and returns it, which is exactly the eviction signal an
-/// indicator needs to undo the leaving observation. Pushing is `O(1)`, reading
-/// by logical index is `O(1)`, and iteration visits the live values from oldest
-/// to newest.
+/// the oldest value and returns it, which is exactly the eviction signal a
+/// caller needs to undo the leaving observation. Pushing is `O(1)`, reading by
+/// logical index is `O(1)`, and iteration visits the live values from oldest to
+/// newest.
 ///
 /// # Allocation
 ///
@@ -35,9 +46,9 @@ use crate::util::ensure_finite;
 /// # Examples
 ///
 /// ```
-/// use kurumi_ta::RingBuffer;
+/// use kurumi_core::RingBuffer;
 ///
-/// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+/// # fn main() -> Result<(), kurumi_core::KurumiError> {
 /// let mut window = RingBuffer::new(3)?;
 /// assert_eq!(window.push(1.0), None);
 /// assert_eq!(window.push(2.0), None);
@@ -64,9 +75,9 @@ impl<T> RingBuffer<T> {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RingBuffer;
+    /// use kurumi_core::RingBuffer;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// assert!(RingBuffer::<f64>::new(0).is_err());
     /// assert_eq!(RingBuffer::<f64>::new(4)?.capacity(), 4);
     /// # Ok(())
@@ -93,9 +104,9 @@ impl<T> RingBuffer<T> {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RingBuffer;
+    /// use kurumi_core::RingBuffer;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut buffer = RingBuffer::new(2)?;
     /// assert_eq!(buffer.push("a"), None);
     /// assert_eq!(buffer.push("b"), None);
@@ -121,9 +132,9 @@ impl<T> RingBuffer<T> {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RingBuffer;
+    /// use kurumi_core::RingBuffer;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut buffer = RingBuffer::new(3)?;
     /// buffer.push(1);
     /// buffer.push(2);
@@ -143,9 +154,9 @@ impl<T> RingBuffer<T> {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RingBuffer;
+    /// use kurumi_core::RingBuffer;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut buffer = RingBuffer::new(2)?;
     /// buffer.push(7);
     /// assert_eq!(buffer.front(), Some(&7));
@@ -163,9 +174,9 @@ impl<T> RingBuffer<T> {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RingBuffer;
+    /// use kurumi_core::RingBuffer;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut buffer = RingBuffer::new(2)?;
     /// buffer.push(7);
     /// buffer.push(9);
@@ -184,9 +195,9 @@ impl<T> RingBuffer<T> {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RingBuffer;
+    /// use kurumi_core::RingBuffer;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut buffer = RingBuffer::new(3)?;
     /// buffer.push(1);
     /// buffer.push(2);
@@ -251,9 +262,9 @@ impl<T> RingBuffer<T> {
 /// # Examples
 ///
 /// ```
-/// use kurumi_ta::RollingWindow;
+/// use kurumi_core::RollingWindow;
 ///
-/// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+/// # fn main() -> Result<(), kurumi_core::KurumiError> {
 /// let mut window = RollingWindow::new(3)?;
 /// window.push(1.0)?;
 /// window.push(4.0)?;
@@ -289,9 +300,9 @@ impl RollingWindow {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingWindow;
+    /// use kurumi_core::RollingWindow;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// assert!(RollingWindow::new(0).is_err());
     /// assert_eq!(RollingWindow::new(5)?.capacity(), 5);
     /// # Ok(())
@@ -320,9 +331,9 @@ impl RollingWindow {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingWindow;
+    /// use kurumi_core::RollingWindow;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingWindow::new(2)?;
     /// window.push(3.0)?;
     /// assert!(window.push(f64::NAN).is_err());
@@ -391,9 +402,9 @@ impl RollingWindow {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingWindow;
+    /// use kurumi_core::RollingWindow;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingWindow::new(2)?;
     /// assert_eq!(window.mean(), None);
     /// window.push(1.0)?;
@@ -416,9 +427,9 @@ impl RollingWindow {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingWindow;
+    /// use kurumi_core::RollingWindow;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingWindow::new(3)?;
     /// window.push(2.0)?;
     /// window.push(-1.0)?;
@@ -437,9 +448,9 @@ impl RollingWindow {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingWindow;
+    /// use kurumi_core::RollingWindow;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingWindow::new(3)?;
     /// window.push(2.0)?;
     /// window.push(-1.0)?;
@@ -530,9 +541,9 @@ impl RollingWindow {
 /// # Examples
 ///
 /// ```
-/// use kurumi_ta::RollingVariance;
+/// use kurumi_core::RollingVariance;
 ///
-/// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+/// # fn main() -> Result<(), kurumi_core::KurumiError> {
 /// let mut window = RollingVariance::new(3)?;
 /// for value in [2.0, 4.0, 4.0] {
 ///     window.push(value)?;
@@ -560,9 +571,9 @@ impl RollingVariance {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingVariance;
+    /// use kurumi_core::RollingVariance;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// assert!(RollingVariance::new(0).is_err());
     /// assert_eq!(RollingVariance::new(3)?.capacity(), 3);
     /// # Ok(())
@@ -588,9 +599,9 @@ impl RollingVariance {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingVariance;
+    /// use kurumi_core::RollingVariance;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingVariance::new(2)?;
     /// window.push(1.0)?;
     /// window.push(3.0)?;
@@ -622,9 +633,9 @@ impl RollingVariance {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingVariance;
+    /// use kurumi_core::RollingVariance;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingVariance::new(3)?;
     /// assert_eq!(window.mean(), None);
     /// window.push(5.0)?;
@@ -648,9 +659,9 @@ impl RollingVariance {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingVariance;
+    /// use kurumi_core::RollingVariance;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingVariance::new(2)?;
     /// window.push(1.0)?;
     /// window.push(3.0)?;
@@ -674,9 +685,9 @@ impl RollingVariance {
     /// # Examples
     ///
     /// ```
-    /// use kurumi_ta::RollingVariance;
+    /// use kurumi_core::RollingVariance;
     ///
-    /// # fn main() -> Result<(), kurumi_ta::KurumiError> {
+    /// # fn main() -> Result<(), kurumi_core::KurumiError> {
     /// let mut window = RollingVariance::new(2)?;
     /// window.push(1.0)?;
     /// window.push(3.0)?;
