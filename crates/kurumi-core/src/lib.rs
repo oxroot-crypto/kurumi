@@ -5,6 +5,7 @@
 //!
 //! - monetary amounts and high-precision decimal values;
 //! - calendar dates, business-day conventions, and day-count fractions;
+//! - fixed-capacity ring buffers and their O(1) sliding-window aggregates;
 //! - the unified [`KurumiError`] type returned by fallible public APIs.
 //!
 //! The crate has no workspace dependencies, and every other `kurumi-*` crate is
@@ -45,10 +46,12 @@
 )]
 
 pub mod error;
+pub mod ring_buffer;
 pub mod time;
 pub mod types;
 
 pub use error::KurumiError;
+pub use ring_buffer::{RingBuffer, RollingVariance, RollingWindow};
 pub use time::{
     BusinessDayConvention, Calendar, Date, DayCountConvention, Weekday, WeekendCalendar,
 };

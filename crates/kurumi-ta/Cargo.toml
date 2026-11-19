@@ -14,5 +14,9 @@ categories.workspace = true
 kurumi-core = { workspace = true }
 kurumi-math = { workspace = true }
 
+[dev-dependencies]
+approx = { workspace = true }
+proptest = { workspace = true }
+
 [lints]
 workspace = true
