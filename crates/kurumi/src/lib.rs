@@ -11,6 +11,7 @@
 //! | `risk` | `kurumi::risk` | `kurumi-risk` |
 //! | `portfolio` | `kurumi::portfolio` | `kurumi-portfolio` |
 //! | `backtest` | `kurumi::backtest` | `kurumi-backtest` |
+//! | `exec` | `kurumi::exec` | `kurumi-exec` |
 //! | `feed` | `kurumi::feed` | `kurumi-feed` |
 //! | `parallel` | `kurumi-backtest`'s Rayon switch | `kurumi-backtest` |
 //! | `full` | all of the above | every member crate |
@@ -18,7 +19,7 @@
 //! The default feature set is `full` plus `parallel`, which enables every module
 //! and the parallel parameter sweep. Features are additive and lower-layer
 //! features are implied by the features above them, so enabling `risk` also
-//! enables `core`, `math`, `ta`, and `pricing`. The `feed` feature already
+//! enables `core`, `math`, `ta`, and `pricing`, and `exec` implies `backtest`. The `feed` feature already
 //! implies `ta`; a `--no-default-features` build that omits `feed` never links
 //! an asynchronous runtime.
 //!
@@ -68,6 +69,9 @@ pub use kurumi_portfolio as portfolio;
 
 #[cfg(feature = "backtest")]
 pub use kurumi_backtest as backtest;
+
+#[cfg(feature = "exec")]
+pub use kurumi_exec as exec;
 
 #[cfg(feature = "feed")]
 pub use kurumi_feed as feed;
@@ -165,5 +169,13 @@ pub mod prelude {
         TrialSummary, TriggerContext, WalkForwardAnalyzer, WalkForwardConfig,
         WalkForwardDiagnostics, WalkForwardFold, WalkForwardMode, WalkForwardReport,
         equity_returns, generate_folds,
+    };
+
+    #[cfg(feature = "exec")]
+    pub use kurumi_exec::{
+        BacktestConfig, BacktestRunner, ClientOrderId, ExecError, ExecMarketEvent, ExecutionLedger,
+        ExecutionReport, MemoryJournal, OrderCommand, OrderRecord, OrderRequest, OrderSide,
+        OrderStatus, OrderType, PaperMatchingEngine, PortfolioRebalanceStrategy, RiskGate,
+        Strategy, StrategyContext, TimeInForce,
     };
 }

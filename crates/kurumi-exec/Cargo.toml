@@ -1,0 +1,35 @@
+[package]
+name = "kurumi-exec"
+description = "Sans-I/O execution kernel for Kurumi: order state machine, reservation ledger, risk gate, paper matching, and a synchronous backtest runner."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+kurumi-core = { workspace = true }
+kurumi-ta = { workspace = true }
+kurumi-risk = { workspace = true }
+kurumi-portfolio = { workspace = true }
+kurumi-backtest = { workspace = true }
+chrono = { workspace = true }
+rust_decimal = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = []
+# Reserved for the future asynchronous broker adapter. This crate is Sans-I/O,
+# so no code is gated by this feature yet; enabling it must not pull a runtime.
+live = []
+
+[dev-dependencies]
+kurumi-math = { workspace = true }
+
+[lints]
+workspace = true
