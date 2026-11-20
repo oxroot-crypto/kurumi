@@ -405,7 +405,7 @@ impl PortfolioBacktestReport {
     }
 }
 
-fn curve_returns(curve: &[(DateTime<Utc>, Decimal)]) -> Result<Vec<f64>, KurumiError> {
+pub(crate) fn curve_returns(curve: &[(DateTime<Utc>, Decimal)]) -> Result<Vec<f64>, KurumiError> {
     if curve.len() < 3 {
         return Err(KurumiError::InsufficientData {
             required: 3,
