@@ -46,7 +46,7 @@ kurumi-ta = { version = "0.1.0", path = "crates/kurumi-ta" }
 kurumi-pricing = { version = "0.1.0", path = "crates/kurumi-pricing" }
 kurumi-risk = { version = "0.1.0", path = "crates/kurumi-risk" }
 kurumi-portfolio = { version = "0.1.0", path = "crates/kurumi-portfolio" }
-kurumi-backtest = { version = "0.1.0", path = "crates/kurumi-backtest" }
+kurumi-backtest = { version = "0.1.0", path = "crates/kurumi-backtest", default-features = false }
 kurumi-exec = { version = "0.1.0", path = "crates/kurumi-exec" }
 kurumi-feed = { version = "0.1.0", path = "crates/kurumi-feed" }
 

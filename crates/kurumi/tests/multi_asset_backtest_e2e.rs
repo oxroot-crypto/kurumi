@@ -403,3 +403,77 @@ fn scenario_c_no_lookahead_bias_keeps_the_prefix_bit_identical() -> Result<(), K
     );
     Ok(())
 }
+
+/// A look-ahead probe that exercises the rolling optimizer path: the static
+/// allocator in scenario C cannot observe a future-aware return matrix, while
+/// `RollingOptimizerAllocator` consumes rolling returns on every rebalance.
+#[test]
+fn scenario_d_rolling_optimizer_no_lookahead_keeps_the_prefix() -> Result<(), KurumiError> {
+    const ROLLING_CUTOFF: usize = 500;
+
+    let closes = simulated_closes();
+    let days = trading_days(TRADING_DAYS);
+    let original = build_feed(&closes, &days, &missing_days(), |_| 1.0)?;
+    let tampered = build_feed(&closes, &days, &missing_days(), |day| {
+        if day >= ROLLING_CUTOFF { 10.0 } else { 1.0 }
+    })?;
+
+    let run = |feed: MultiAssetFeed| -> Result<PortfolioBacktestReport, KurumiError> {
+        let (fee, slippage) = cost_models()?;
+        let mut engine =
+            PortfolioBacktestEngine::new(config(ExecutionTiming::SignalBarClose)?, fee, slippage)?;
+        let mut allocator =
+            RollingOptimizerAllocator::new(LedoitWolfShrinkage, HierarchicalRiskParity::new())
+                .with_min_lookback_periods(60)?;
+        engine.run(feed, &CalendarTrigger::Monthly, &mut allocator)
+    };
+    let original_report = run(original)?;
+    let tampered_report = run(tampered)?;
+
+    let cutoff = days
+        .get(ROLLING_CUTOFF)
+        .expect("cutoff trading day")
+        .timestamp_millis();
+    let prefix_curve = |report: &PortfolioBacktestReport| {
+        report
+            .equity_curve
+            .iter()
+            .filter(|(timestamp, _)| timestamp.timestamp_millis() < cutoff)
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    let prefix_weights = |report: &PortfolioBacktestReport| {
+        report
+            .weight_history
+            .iter()
+            .filter(|(timestamp, _)| timestamp.timestamp_millis() < cutoff)
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    let prefix_events = |report: &PortfolioBacktestReport| {
+        report
+            .rebalance_events
+            .iter()
+            .filter(|event| event.timestamp.timestamp_millis() < cutoff)
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+
+    let original_curve = prefix_curve(&original_report);
+    assert_eq!(original_curve.len(), ROLLING_CUTOFF);
+    assert_eq!(original_curve, prefix_curve(&tampered_report));
+    assert_eq!(
+        prefix_weights(&original_report),
+        prefix_weights(&tampered_report)
+    );
+    assert_eq!(
+        prefix_events(&original_report),
+        prefix_events(&tampered_report)
+    );
+    assert_ne!(
+        original_report.equity_curve.last(),
+        tampered_report.equity_curve.last(),
+        "the tampered future must actually change the end of the run"
+    );
+    Ok(())
+}

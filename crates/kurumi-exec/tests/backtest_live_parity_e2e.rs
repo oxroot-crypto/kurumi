@@ -213,6 +213,13 @@ async fn wait_for_bars(counter: &Arc<AtomicUsize>, target: usize) {
 async fn replay_bars(
     bars: &[OhlcvBar],
 ) -> Result<(LiveSessionSummary, Arc<AtomicUsize>), ExecError> {
+    replay_bars_with_limit(bars, None).await
+}
+
+async fn replay_bars_with_limit(
+    bars: &[OhlcvBar],
+    resting_limit: Option<Decimal>,
+) -> Result<(LiveSessionSummary, Arc<AtomicUsize>), ExecError> {
     let mut hub = MarketDataHub::new(4096)?;
     let provider = Arc::new(MockReplayProvider::new(
         "mock",
@@ -246,6 +253,9 @@ async fn replay_bars(
         Box::new(MemoryJournal::new()),
     )?;
     let mut strategy = EmaCrossStrategy::new(3, 8)?;
+    if let Some(limit) = resting_limit {
+        strategy = strategy.with_resting_limit(limit);
+    }
     let counter = strategy.bars_seen();
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let handle =
@@ -291,6 +301,78 @@ async fn backtest_and_live_produce_identical_fills_and_equity() {
     let (summary, _) = replay_bars(&bars).await.expect("live run");
 
     assert!(!report.fills.is_empty(), "the strategy must trade");
+    assert_eq!(summary.fills.len(), report.fills.len());
+    for (live, backtest) in summary.fills.iter().zip(report.fills.iter()) {
+        assert_eq!(live.symbol, backtest.symbol);
+        assert_eq!(live.side, backtest.side);
+        assert_eq!(live.fill_price, backtest.fill_price);
+        assert_eq!(live.fill_qty, backtest.fill_qty);
+        assert_eq!(live.fee, backtest.fee);
+        assert_eq!(live.slippage, backtest.slippage);
+        assert_eq!(live.client_order_id, backtest.client_order_id);
+        assert_eq!(live.exec_id, backtest.exec_id);
+        assert_eq!(live.timestamp, backtest.timestamp);
+    }
+    assert_eq!(summary.equity_curve, report.equity_curve);
+    assert_eq!(summary.final_equity, report.final_equity);
+    assert_eq!(summary.initial_cash, report.initial_cash);
+}
+
+// ---------------------------------------------------------------------------
+// Test A2: an in-range limit waits for a later bar in both paths
+// ---------------------------------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn backtest_and_live_defer_in_range_limit_to_a_later_bar() {
+    let bars = bars().expect("bars");
+    let data = backtest_bars(&bars).expect("aligned data");
+    // Bar 0 has low 99.8, so this buy limit would fill on the signal bar under
+    // same-bar matching. Bar 1 has low 105.53, so it must wait for a later bar.
+    let limit = Decimal::from(102);
+
+    let mut backtest = BacktestRunner::new(
+        BacktestConfig {
+            initial_cash: Decimal::from(1_000_000),
+            fee_buffer_bps: Decimal::from(50),
+            periods_per_year: 252.0,
+            risk_free_rate: 0.0,
+        },
+        RiskGate::empty(),
+        PaperMatchingEngine::new(Box::new(fee().expect("fee")), Box::new(NoSlippage)),
+        Box::new(MemoryJournal::new()),
+    )
+    .expect("backtest runner");
+    let mut backtest_strategy = EmaCrossStrategy::new(3, 8)
+        .expect("strategy")
+        .with_resting_limit(limit);
+    let report = backtest
+        .run(data.slice(), &mut backtest_strategy)
+        .expect("backtest");
+
+    let (summary, _) = replay_bars_with_limit(&bars, Some(limit))
+        .await
+        .expect("live run");
+
+    // `EmaCrossStrategy` submits the resting limit before any EMA signal, so it
+    // is the first deterministic client order id.
+    let limit_id = "ord-000000000000";
+    let backtest_limit_fill = report
+        .fills
+        .iter()
+        .find(|fill| fill.client_order_id == limit_id)
+        .expect("backtest resting limit fill");
+    let live_limit_fill = summary
+        .fills
+        .iter()
+        .find(|fill| fill.client_order_id == limit_id)
+        .expect("live resting limit fill");
+
+    assert!(
+        backtest_limit_fill.timestamp.timestamp_millis() > START_MS,
+        "an in-range limit must not fill on the signal bar"
+    );
+    assert_eq!(backtest_limit_fill.timestamp, live_limit_fill.timestamp);
+
     assert_eq!(summary.fills.len(), report.fills.len());
     for (live, backtest) in summary.fills.iter().zip(report.fills.iter()) {
         assert_eq!(live.symbol, backtest.symbol);

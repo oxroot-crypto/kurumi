@@ -127,7 +127,7 @@ use super::grid::{
     GridSearchConfig, GridSearchResult, GridSearchRunner, StrategySpec, TrialStatus, TrialSummary,
 };
 use crate::portfolio::report::curve_returns;
-use crate::portfolio::{AlignedMarketData, PortfolioBacktestReport};
+use crate::portfolio::{AlignedMarketData, PortfolioBacktestReport, RebalanceCause};
 
 /// The minimum number of evaluated observations a backtest needs to produce
 /// performance metrics.
@@ -761,9 +761,13 @@ pub struct WalkForwardReport<P> {
     pub oos_metrics: PerformanceMetrics,
     /// Sum of the one-way turnover recorded by the out-of-sample folds, in
     /// weight units.
+    ///
+    /// Each fold's initial build is excluded: every fold starts from cash, so
+    /// that setup trade is not continuing out-of-sample turnover.
     pub oos_total_turnover: f64,
     /// `oos_total_turnover` annualized over the stitched observations, in turns
-    /// per year.
+    /// per year. Initial fold builds are excluded, matching
+    /// [`WalkForwardReport::oos_total_turnover`].
     pub oos_annualized_turnover: f64,
     /// Overfitting diagnostics.
     pub diagnostics: WalkForwardDiagnostics,
@@ -993,11 +997,16 @@ impl WalkForwardAnalyzer {
             stitched.extend(fold_curve.iter().copied());
             level = fold_curve.last().map(|(_, equity)| *equity);
 
-            let fold_periods = oos_report.equity_curve.len().saturating_sub(1) as f64;
-            if fold_periods > 0.0 && oos_report.periods_per_year > 0.0 {
-                total_turnover +=
-                    oos_report.annualized_turnover * fold_periods / oos_report.periods_per_year;
-            }
+            // Each fold starts from cash, so its first rebalance is a setup
+            // trade that re-enters the book. Counting it would make the OOS
+            // turnover depend on the number of folds rather than on ongoing
+            // trading, so only the continuing rebalances contribute here.
+            total_turnover += oos_report
+                .rebalance_events
+                .iter()
+                .filter(|event| event.cause != RebalanceCause::Initial)
+                .map(|event| event.turnover)
+                .sum::<f64>();
 
             folds.push(WalkForwardFold {
                 window,
@@ -1233,12 +1242,15 @@ fn build_diagnostics<P: PartialEq>(
 mod tests {
     use super::*;
     use crate::portfolio::{
-        CalendarTrigger, MultiAssetFeed, PortfolioBacktestConfig, StaticWeightAllocator,
+        AllocationContext, CalendarTrigger, MultiAssetFeed, PortfolioBacktestConfig,
+        StaticWeightAllocator, TargetWeightAllocator,
     };
     use crate::validation::{ObjectiveMetric, ResultFilter};
+    use kurumi_portfolio::PortfolioWeights;
     use kurumi_ta::OhlcvBar;
     use rust_decimal::Decimal;
     use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex};
 
     const DAY: i64 = 86_400_000;
     const BARS: usize = 120;
@@ -1418,6 +1430,36 @@ mod tests {
         assert!(report.oos_final_equity > Decimal::ZERO);
         assert!(report.oos_total_turnover >= 0.0);
         assert!(report.oos_annualized_turnover.is_finite());
+        let initial_builds = report
+            .folds
+            .iter()
+            .filter(|fold| {
+                fold.oos_report
+                    .rebalance_events
+                    .iter()
+                    .any(|event| event.cause == RebalanceCause::Initial)
+            })
+            .count();
+        assert_eq!(initial_builds, report.folds.len());
+        let expected_turnover = report
+            .folds
+            .iter()
+            .flat_map(|fold| fold.oos_report.rebalance_events.iter())
+            .filter(|event| event.cause != RebalanceCause::Initial)
+            .map(|event| event.turnover)
+            .sum::<f64>();
+        assert!((report.oos_total_turnover - expected_turnover).abs() < 1e-12);
+        assert!((report.oos_annualized_turnover - expected_turnover / 95.0 * 252.0).abs() < 1e-12);
+        assert!(
+            report.oos_total_turnover
+                < report
+                    .folds
+                    .iter()
+                    .flat_map(|fold| fold.oos_report.rebalance_events.iter())
+                    .map(|event| event.turnover)
+                    .sum::<f64>(),
+            "the initial builds must be excluded from the OOS turnover"
+        );
         assert_eq!(
             report
                 .stitched_oos_equity_curve
@@ -1473,6 +1515,78 @@ mod tests {
                 .map(|(timestamp, _)| *timestamp)
                 .collect::<Vec<_>>(),
             expected_timestamps
+        );
+    }
+
+    /// Records the number of return rows visible to each allocation, so a test
+    /// can prove the OOS warmup prefix is consumed rather than dropped.
+    type AllocationRecord = (DateTime<Utc>, Option<usize>);
+    type SharedAllocationRecords = Arc<Mutex<Vec<AllocationRecord>>>;
+
+    #[derive(Debug)]
+    struct RecordingAllocator {
+        records: SharedAllocationRecords,
+        inner: StaticWeightAllocator,
+    }
+
+    impl TargetWeightAllocator for RecordingAllocator {
+        fn allocate(&mut self, ctx: &AllocationContext) -> Result<PortfolioWeights, KurumiError> {
+            let rows = ctx.returns.as_ref().map(|matrix| matrix.dimensions().0);
+            self.records
+                .lock()
+                .expect("recording allocator mutex")
+                .push((ctx.timestamp, rows));
+            self.inner.allocate(ctx)
+        }
+    }
+
+    #[test]
+    fn oos_warmup_prefix_is_consumed_before_the_first_oos_allocation() {
+        let data = data(BARS);
+        let config = small_config();
+        let folds = generate_folds(data.len(), &config).expect("valid plan");
+        let last = folds.last().copied().expect("last fold");
+        let oos_start_timestamp = data
+            .snapshots()
+            .get(last.oos_start)
+            .expect("OOS start snapshot")
+            .timestamp();
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let factory = {
+            let records = Arc::clone(&records);
+            move |interval: &usize| -> Result<StrategySpec, KurumiError> {
+                let mut portfolio = PortfolioBacktestConfig::new(Decimal::from(100_000))?;
+                portfolio.allow_fractional = true;
+                portfolio.lookback_window = 10;
+                let inner = StaticWeightAllocator::new(BTreeMap::from([
+                    ("AAA".to_owned(), 0.6),
+                    ("BBB".to_owned(), 0.4),
+                ]))?;
+                Ok(StrategySpec::new(
+                    portfolio,
+                    Box::new(CalendarTrigger::fixed_interval(*interval)?),
+                    Box::new(RecordingAllocator {
+                        records: Arc::clone(&records),
+                        inner,
+                    }),
+                ))
+            }
+        };
+
+        WalkForwardAnalyzer::new(config)
+            .run(&data, &[3usize, 5usize], factory)
+            .expect("walk-forward run");
+
+        let recorded = records.lock().expect("recording allocator mutex");
+        let observed = recorded
+            .iter()
+            .filter(|(timestamp, _)| *timestamp == oos_start_timestamp)
+            .filter_map(|(_, rows)| *rows)
+            .max();
+        assert_eq!(
+            observed,
+            Some(last.oos_warmup()),
+            "the first OOS allocation must see the whole warmup prefix"
         );
     }
 

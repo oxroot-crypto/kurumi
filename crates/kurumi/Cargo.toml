@@ -41,7 +41,9 @@ exec-live = ["exec", "feed", "kurumi-exec/live"]
 feed = ["dep:kurumi-feed", "ta"]
 # Forwards the `kurumi-backtest` Rayon switch. It is additive: enabling it also
 # enables the backtest module, and disabling default features keeps it off.
-parallel = ["backtest", "kurumi-backtest/parallel"]
+# The weak `kurumi-exec?/parallel` edge propagates the switch when `exec` is
+# enabled without pulling `kurumi-exec` into a backtest-only build.
+parallel = ["backtest", "kurumi-backtest/parallel", "kurumi-exec?/parallel"]
 full = [
     "core",
     "math",

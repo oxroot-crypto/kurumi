@@ -48,11 +48,12 @@ isolated asynchronous branch: it may depend on
 `kurumi-core` and `kurumi-ta`, but no synchronous crate may depend on it.
 `kurumi-exec` is Sans-I/O by default; only its additive `live` feature may
 depend on `kurumi-feed` and async runtime crates, and that feature is never part
-of a default build. The `kurumi` facade depends on every synchronous member
-crate, and no member may depend on the facade. `kurumi-feed` and the
-`kurumi-exec` live layer are not part of the default facade feature set; expose
-them only behind additive opt-in features so a default `kurumi` build never
-pulls an async runtime.
+of a default `kurumi-exec` build. The `kurumi` facade depends on every
+synchronous member crate, and no member may depend on the facade. `kurumi-feed`
+and the `kurumi-exec` live layer remain additive opt-in features: the `kurumi`
+facade's default `full` set intentionally includes them per the Nasdaq
+integration request, so a default `kurumi` build links the async runtime, while
+`--no-default-features` (or omitting `feed`/`exec-live`) stays runtime-free.
 
 Crate boundaries are part of the public architecture: do not merge crates,
 introduce a new crate, or add an edge that reverses the layering without an
@@ -90,10 +91,10 @@ explicit architectural decision recorded in the PR.
 - **Facade features**: `kurumi` exposes each synchronous member behind an
   additive feature (`core`, `math`, `ta`, `pricing`, `risk`, `portfolio`,
   `backtest`, `exec`, `exec-live`). Features are additive: enabling one must not break another, and
-  lower-layer features are implied by higher-layer ones. Default features enable
-  the whole synchronous library. `kurumi-feed` stays outside the default feature
-  set so a default build never pulls an async runtime. Keep the feature graph in
-  sync with the crate layering.
+  lower-layer features are implied by higher-layer ones. The default `full` set
+  intentionally includes the asynchronous `feed` and `exec-live` layers per
+  the Nasdaq integration request; `--no-default-features` produces a runtime-free
+  synchronous build. Keep the feature graph in sync with the crate layering.
 - **Bindings**: Python/WASM bindings live in `kurumi` behind dedicated opt-in
   features and must be thin adapters over the Rust API. Business logic never
   lives in binding code.
@@ -187,7 +188,10 @@ it.
   `live` feature, to `kurumi-exec`. Never introduce async runtime dependencies
   into `kurumi-core`, `kurumi-math`, `kurumi-ta`, `kurumi-pricing`,
   `kurumi-risk`, `kurumi-portfolio`, or `kurumi-backtest` (including their
-  dev-dependencies). A default `kurumi` or `kurumi-exec` build MUST NOT pull a runtime.
+  dev-dependencies). A default `kurumi-exec` build MUST NOT pull a runtime; the
+  default `kurumi` facade intentionally does, because its `full` set includes
+  `feed`/`exec-live` per the Nasdaq integration request, while
+  `--no-default-features` (or omitting those features) stays runtime-free.
 - **Pure Rust TLS**: Configure `tokio-tungstenite` and `reqwest` with `rustls`
   (disabling default OpenSSL/native-tls) to ensure portable builds. Do not add
   an OpenSSL or `native-tls` feature path.
@@ -235,7 +239,7 @@ it.
 - **Asset Reservation Accounting**: `ExecutionLedger` MUST track `reserved_cash` for open buy orders and `reserved_qty` per symbol for open sell orders. Reject any new order that exceeds available (unreserved) cash or long quantity (unless shorting is explicitly enabled).
 - **Strict Order FSM & Idempotency**: Enforce valid order state transitions (`PendingSubmit` -> `Open` -> `PartiallyFilled` -> `Filled` / `Canceled` / `Rejected`) and deduplicate fills by `exec_id`. Never apply the same fill twice.
 - **Backtest-Live Parity**: Running the exact same `Strategy` struct through `BacktestRunner` and through `LiveRunner` + `PaperBroker` fed with identical bar/tick events MUST produce bit-for-bit identical fills, fees, and final `Decimal` equity.
-- **Live Feature Isolation**: `kurumi-exec`'s async broker adapters, `LiveRunner`, and `kurumi-feed` dependency MUST be optional and gated by `#[cfg(feature = "live")]`. A default `kurumi-exec` build and a `kurumi` build without `exec-live` MUST remain runtime-free; the JSONL journal uses a hand-rolled JSON writer, and `serde_json` is a `live`-only dependency.
+- **Live Feature Isolation**: `kurumi-exec`'s async broker adapters, `LiveRunner`, and `kurumi-feed` dependency MUST be optional and gated by `#[cfg(feature = "live")]`. A default `kurumi-exec` build, and a `kurumi` build that enables neither `feed` nor `exec-live`, MUST remain runtime-free; the JSONL journal uses a hand-rolled JSON writer, and `serde_json` is a `live`-only dependency.
 - **Live Feed Fidelity**: `LiveRunner` MUST translate `kurumi-feed` trades, quotes, and finalized bars into `ExecMarketEvent` without routing prices through `f64`, and MUST mark the ledger from the event timestamp before invoking a strategy. Optional `BarAggregator` output replaces raw trades for the strategy while finalized bars remain the only accepted bar input.
 - **Broker Contract**: `ExecutionBroker` implementations MUST be `Send + Sync`, return boxed futures, publish every report through `subscribe_reports`, use deterministic timestamps from market events (never `Utc::now`), and parse all REST prices and quantities directly into `Decimal` strings. `sync_account` is the startup reconciliation hook; `on_market_event` may be a no-op for a real venue.
 - **Live Shutdown & Lag**: On shutdown `LiveRunner` MUST call `Strategy::on_stop`, optionally cancel every open order, release ledger reservations, flush the journal, and return a `LiveSessionSummary`. Broadcast lag MUST be logged; when configured, a skipped-event threshold pauses new exposure while reducing orders remain accepted.

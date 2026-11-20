@@ -8,7 +8,9 @@
 //! 2. match orders that were left working by earlier observations;
 //! 3. call the strategy and process its commands, submitting sells before
 //!    matching them and then submitting buys, so sale proceeds can fund buys;
-//! 4. match the new orders and record an equity snapshot.
+//!    new market orders match on this observation, while new limit/stop orders
+//!    are registered and wait for a later one;
+//! 4. match the new market orders and record an equity snapshot.
 //!
 //! The driver has no runtime and no clock: all timestamps come from the market
 //! data. The same strategy and matching engine can therefore be driven by a
@@ -747,7 +749,7 @@ impl BacktestRunner {
         };
         self.ledger.apply_execution_report(&accepted)?;
         self.matching
-            .register_order(request.clone(), reference_price)?;
+            .register_order_at(request.clone(), reference_price, timestamp, true)?;
         self.journal
             .record(&JournalRecord::submit(timestamp, &request))?;
         self.journal.record(&JournalRecord::accepted(
