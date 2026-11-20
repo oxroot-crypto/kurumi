@@ -16,12 +16,15 @@ kurumi-ta = { workspace = true }
 rust_decimal = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "net"] }
 tokio-tungstenite = { workspace = true }
 reqwest = { workspace = true }
 futures-util = { workspace = true }
 bytes = { workspace = true }
-serde_json = { workspace = true }
+# `arbitrary_precision` keeps the JSON number literal intact so exchange prices
+# can be converted to `Decimal` through their textual representation instead of
+# being rounded through `f64`.
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

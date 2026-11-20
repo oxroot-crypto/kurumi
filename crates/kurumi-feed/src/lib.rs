@@ -29,12 +29,21 @@
 //! Network TLS is pure Rust (`rustls`) so portable builds never require
 //! OpenSSL. See the `kurumi-feed` invariants in `AGENTS.md`.
 //!
+//! # Built-in providers
+//!
+//! [`MockReplayProvider`] is the deterministic reference connector. The
+//! [`providers::nasdaq`] module adds native TotalView-ITCH 5.0 binary decoding
+//! and replay ([`ItchDecoder`], [`ItchStreamProvider`]), the Nasdaq Cloud Data
+//! Service REST resources and deduplicating polling connector
+//! ([`NcdsRestClient`], [`NcdsPollingConnector`]), and an Alpaca Market Data v2
+//! compatible US equity WebSocket connector ([`NasdaqWsProvider`]).
+//!
 //! # Offline testing
 //!
-//! The test suite never contacts a live endpoint. [`MockReplayProvider`]
-//! supplies deterministic events, injected disconnects, and loopback-only
-//! channels; live-endpoint tests, when added, must be `#[ignore]`d and read
-//! credentials from environment variables.
+//! The test suite never contacts a live endpoint. [`MockReplayProvider`],
+//! embedded ITCH binary fixtures, and loopback WebSocket and HTTP mock servers
+//! cover the default tests. The live Alpaca template is `#[ignore]`d and reads
+//! its credentials from environment variables.
 //!
 //! # Example
 //!
@@ -92,6 +101,10 @@ pub use model::{
     MarketEvent, QuoteTick, Subscription, TradeTick, Venue,
 };
 pub use providers::MockReplayProvider;
+pub use providers::nasdaq::{
+    ItchDecoder, ItchStreamProvider, LastQuote, LastSale, NasdaqWsConfig, NasdaqWsProvider,
+    NcdsBar, NcdsBarPrecision, NcdsPollingConnector, NcdsRestClient, NcdsRestConfig, NcdsSnapshot,
+};
 pub use runtime::{ManagedConnector, ReconnectPolicy};
 
 pub use kurumi_ta::OhlcvBar;
