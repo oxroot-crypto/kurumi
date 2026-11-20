@@ -135,8 +135,13 @@ pub mod prelude {
 
     #[cfg(feature = "backtest")]
     pub use kurumi_backtest::{
-        BacktestEngine, BacktestReport, EquityPoint, FeeModel, Fill, FixedBpsSlippage,
-        FixedRateFee, Liquidity, MakerTakerFee, NoFee, NoSlippage, Order, OrderKind,
-        PortfolioAccount, Side, SlippageModel, equity_returns,
+        AllocationContext, AssetPosition, BacktestEngine, BacktestReport, BenchmarkComparison,
+        CalendarTrigger, CompositeTrigger, CustomAllocator, DriftTrigger, EquityPoint,
+        ExecutionTiming, FeeModel, Fill, FixedBpsSlippage, FixedRateFee, InsufficientDataPolicy,
+        Liquidity, MakerTakerFee, MarketSnapshot, MultiAssetAccount, MultiAssetFeed,
+        MultiAssetFill, NoFee, NoSlippage, Order, OrderKind, PortfolioAccount,
+        PortfolioBacktestConfig, PortfolioBacktestEngine, PortfolioBacktestReport, RebalanceCause,
+        RebalanceEvent, RebalanceTrigger, RollingOptimizerAllocator, Side, SlippageModel,
+        StaticWeightAllocator, TargetWeightAllocator, TriggerContext, equity_returns,
     };
 }

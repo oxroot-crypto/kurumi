@@ -9,6 +9,12 @@
 //!   [`MultiAssetAccount`], the `Decimal` ledger for several instruments;
 //! - [`trigger`] provides [`TriggerContext`], the [`RebalanceTrigger`] trait,
 //!   and calendar, drift, and composite implementations.
+//! - [`allocator`] bridges the loop to `kurumi-portfolio` with static, rolling
+//!   optimizer, and closure-backed target-weight allocators.
+//! - [`engine`] runs the backtest: signal timing, halt handling,
+//!   sell-before-buy execution, and the audit trail.
+//! - [`report`] turns the equity curve into risk metrics and benchmark-relative
+//!   attribution, keeping every rebalance event and weight snapshot.
 //!
 //! Every position, snapshot, and price map is a [`std::collections::BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html),
 //! so iteration order and backtest results are deterministic. Money and
@@ -65,13 +71,23 @@
 //! ```
 
 pub mod account;
+pub mod allocator;
+pub mod engine;
 pub mod feed;
+pub mod report;
 pub mod trigger;
 
 pub use account::{AssetPosition, MultiAssetAccount, MultiAssetFill};
+pub use allocator::{
+    AllocationContext, CustomAllocator, InsufficientDataPolicy, RollingOptimizerAllocator,
+    StaticWeightAllocator, TargetWeightAllocator,
+};
+pub use engine::{ExecutionTiming, PortfolioBacktestConfig, PortfolioBacktestEngine};
 pub use feed::{MarketSnapshot, MultiAssetFeed};
+pub use report::{BenchmarkComparison, PortfolioBacktestReport, RebalanceEvent};
 pub use trigger::{
-    CalendarTrigger, CompositeTrigger, DriftTrigger, RebalanceTrigger, TriggerContext,
+    CalendarTrigger, CompositeTrigger, DriftTrigger, RebalanceCause, RebalanceTrigger,
+    TriggerContext,
 };
 
 /// The `chrono` crate, re-exported so callers can build timestamps without
