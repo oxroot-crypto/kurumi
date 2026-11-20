@@ -19,7 +19,7 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 | `kurumi-pricing` | Asset and derivative pricing: cashflows, yield curves, bonds, option pricing engines. |
 | `kurumi-risk` | Risk and performance analytics: VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
 | `kurumi-portfolio` | Multi-asset panel alignment, return matrices, portfolio performance and risk decomposition, rolling beta/correlation panels. |
-| `kurumi-backtest` | Strategy backtesting: order-book matching simulation, slippage and fee models, account/position tracking. |
+| `kurumi-backtest` | Strategy backtesting: order-book matching simulation, slippage and fee models, account/position tracking, and multi-asset portfolio backtesting under `portfolio`. |
 | `kurumi` | Top-level facade: re-exports the member crates behind Cargo features and hosts the Python/WASM bindings. |
 
 ### Crate layering
@@ -27,13 +27,14 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 Dependencies flow in one direction only:
 
 ```text
-kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-portfolio / kurumi-backtest  <  kurumi
+kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-portfolio  <  kurumi-backtest  <  kurumi
 ```
 
 A crate may depend only on crates that appear earlier in this list. `kurumi-ta`
-and `kurumi-pricing` are peers: neither may depend on the other, and
-`kurumi-portfolio` and `kurumi-backtest` are peers above `kurumi-risk`.
-`kurumi-core` has no workspace dependencies. The `kurumi` facade depends on
+and `kurumi-pricing` are peers: neither may depend on the other. `kurumi-backtest`
+sits directly above `kurumi-portfolio` so multi-asset backtesting can consume the
+return panels and optimizers it defines; the dependency never points the other
+way. `kurumi-core` has no workspace dependencies. The `kurumi` facade depends on
 every member crate, and no member may depend on the facade.
 
 Crate boundaries are part of the public architecture: do not merge crates,
@@ -114,7 +115,27 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
   explicit `periods_per_year` and document the convention; per-period measures
   such as Jensen's alpha MUST state that they are per-period.
 
-## 5. Coding & Testing Standards
+## 5. Multi-Asset Backtesting Invariants
+
+- **Backward Compatibility**: Do NOT break existing single-asset
+  `kurumi-backtest` public APIs or unit tests. Place multi-asset backtesting
+  under `kurumi-backtest::portfolio`.
+- **Deterministic Iteration**: ALWAYS use `std::collections::BTreeMap` (never
+  `HashMap`) for positions, market snapshots, and order batches so backtest
+  results are 100% deterministic.
+- **Sell-Before-Buy Execution**: Rebalance order execution MUST settle all SELL
+  orders first to replenish cash before executing BUY orders. Account for fees
+  and slippage via a configurable cash reserve buffer (e.g.,
+  `cash_buffer_ratio`) or pro-rata buy scaling so valid full-investment
+  rebalances never fail due to rounding/fee shortfalls.
+- **Zero Look-Ahead Bias**: Rolling portfolio optimizers MUST only receive
+  historical prices/returns up to and including timestamp `t` (for
+  `SignalBarClose`) or strictly before `t` when filling at open.
+- **Decimal Accounting**: Cash, share quantities, fill prices, fees, slippage,
+  and portfolio equity MUST remain `rust_decimal::Decimal`. Convert to `f64`
+  only when constructing `ReturnMatrix` for `kurumi-portfolio` optimizers.
+
+## 6. Coding & Testing Standards
 
 - Annotate hot-path math functions with `#[inline]`.
 - Document every public struct, trait, enum, function, and module with Rustdoc,
@@ -147,7 +168,7 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
 - New public APIs require Rustdoc and tests in the same change. Do not commit
   commented-out code or dead modules.
 
-## 6. Dependency Management
+## 7. Dependency Management
 
 - Declare every external dependency version once in `[workspace.dependencies]`
   in the root `Cargo.toml`. Member manifests inherit it with
@@ -161,7 +182,7 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
   `kurumi-core` or `kurumi-math` instead.
 - Keep `Cargo.lock` committed so workspace builds are reproducible.
 
-## 7. Definition of Done
+## 8. Definition of Done
 
 A change is complete only when:
 

@@ -31,7 +31,7 @@ ta = ["math", "dep:kurumi-ta"]
 pricing = ["math", "dep:kurumi-pricing"]
 risk = ["ta", "pricing", "dep:kurumi-risk"]
 portfolio = ["risk", "dep:kurumi-portfolio"]
-backtest = ["risk", "dep:kurumi-backtest"]
+backtest = ["portfolio", "dep:kurumi-backtest"]
 full = ["core", "math", "ta", "pricing", "risk", "portfolio", "backtest"]
 
 [lints]

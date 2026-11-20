@@ -16,6 +16,8 @@ kurumi-math = { workspace = true }
 kurumi-ta = { workspace = true }
 kurumi-pricing = { workspace = true }
 kurumi-risk = { workspace = true }
+kurumi-portfolio = { workspace = true }
+chrono = { workspace = true }
 rust_decimal = { workspace = true }
 
 [dev-dependencies]

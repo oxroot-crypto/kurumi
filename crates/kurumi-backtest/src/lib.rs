@@ -13,6 +13,8 @@
 //! - [`report`] converts the equity curve into returns and produces a
 //!   [`BacktestReport`] with the full `kurumi-risk`
 //!   metric set.
+//! - [`portfolio`] adds deterministic multi-asset feeds, accounts, and
+//!   rebalance triggers without changing the single-asset APIs.
 //!
 //! It is the top layer before the `kurumi` facade, so it may use every lower
 //! crate, but nothing in the workspace may depend on it except the facade.
@@ -63,6 +65,7 @@ pub mod account;
 pub mod engine;
 pub mod fee;
 pub mod order;
+pub mod portfolio;
 pub mod report;
 pub mod slippage;
 
@@ -70,6 +73,10 @@ pub use account::{EquityPoint, PortfolioAccount};
 pub use engine::BacktestEngine;
 pub use fee::{FeeModel, FixedRateFee, Liquidity, MakerTakerFee, NoFee};
 pub use order::{Fill, Order, OrderKind, Side};
+pub use portfolio::{
+    AssetPosition, CalendarTrigger, CompositeTrigger, DriftTrigger, MarketSnapshot,
+    MultiAssetAccount, MultiAssetFeed, MultiAssetFill, RebalanceTrigger, TriggerContext,
+};
 pub use report::{BacktestReport, equity_returns};
 pub use slippage::{FixedBpsSlippage, NoSlippage, SlippageModel};
 
