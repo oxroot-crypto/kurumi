@@ -631,6 +631,7 @@ dependencies = [
  "approx",
  "kurumi-backtest",
  "kurumi-core",
+ "kurumi-feed",
  "kurumi-math",
  "kurumi-portfolio",
  "kurumi-pricing",

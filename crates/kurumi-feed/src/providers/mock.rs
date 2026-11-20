@@ -17,9 +17,11 @@ use std::sync::{Mutex, MutexGuard};
 
 use tokio::sync::{mpsc, watch};
 
-use crate::connector::{BoxFuture, ConnectorCommand, MarketDataConnector, apply_command};
+use crate::connector::{
+    BoxFuture, ConnectorCommand, MarketDataConnector, apply_command, event_matches,
+};
 use crate::error::FeedError;
-use crate::model::{ChannelKind, InstrumentId, MarketEvent, Subscription, Venue};
+use crate::model::{MarketEvent, Subscription, Venue};
 
 /// Shared state that survives reconnects.
 #[derive(Debug, Default)]
@@ -170,7 +172,7 @@ impl MockReplayProvider {
                 return Ok(());
             };
 
-            while !is_subscribed(&active, &event) {
+            while !event_matches(&active, &event) {
                 if *shutdown.borrow() {
                     return Ok(());
                 }
@@ -225,38 +227,4 @@ impl MockReplayProvider {
             }
         }
     }
-}
-
-/// Returns `true` when `active` selects the channel carried by `event`.
-fn is_subscribed(active: &BTreeSet<Subscription>, event: &MarketEvent) -> bool {
-    match event {
-        MarketEvent::Trade(tick) => {
-            channel_subscribed(active, &tick.instrument, &ChannelKind::Trades)
-        }
-        MarketEvent::Quote(tick) => {
-            channel_subscribed(active, &tick.instrument, &ChannelKind::Quotes)
-        }
-        MarketEvent::OrderBookDelta(delta) => {
-            channel_subscribed(active, &delta.instrument, &ChannelKind::OrderBook)
-        }
-        MarketEvent::Bar(bar) => channel_subscribed(
-            active,
-            &bar.instrument,
-            &ChannelKind::Bars {
-                interval_secs: bar.interval_secs,
-            },
-        ),
-        MarketEvent::Status(_) | MarketEvent::Lagged { .. } => true,
-    }
-}
-
-/// Returns `true` when any subscription selects `channel` for `instrument`.
-fn channel_subscribed(
-    active: &BTreeSet<Subscription>,
-    instrument: &InstrumentId,
-    channel: &ChannelKind,
-) -> bool {
-    active.iter().any(|subscription| {
-        subscription.instrument == *instrument && subscription.channels.contains(channel)
-    })
 }

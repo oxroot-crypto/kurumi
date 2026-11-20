@@ -18,6 +18,7 @@ kurumi-pricing = { workspace = true, optional = true }
 kurumi-risk = { workspace = true, optional = true }
 kurumi-portfolio = { workspace = true, optional = true }
 kurumi-backtest = { workspace = true, optional = true }
+kurumi-feed = { workspace = true, optional = true }
 
 [dev-dependencies]
 approx = { workspace = true }
@@ -32,10 +33,22 @@ pricing = ["math", "dep:kurumi-pricing"]
 risk = ["ta", "pricing", "dep:kurumi-risk"]
 portfolio = ["risk", "dep:kurumi-portfolio"]
 backtest = ["portfolio", "dep:kurumi-backtest"]
+# Real-time market data. Included in `full` per the Nasdaq integration request;
+# a `--no-default-features` build omits it and never links Tokio.
+feed = ["dep:kurumi-feed", "ta"]
 # Forwards the `kurumi-backtest` Rayon switch. It is additive: enabling it also
 # enables the backtest module, and disabling default features keeps it off.
 parallel = ["backtest", "kurumi-backtest/parallel"]
-full = ["core", "math", "ta", "pricing", "risk", "portfolio", "backtest"]
+full = [
+    "core",
+    "math",
+    "ta",
+    "pricing",
+    "risk",
+    "portfolio",
+    "backtest",
+    "feed",
+]
 
 [lints]
 workspace = true

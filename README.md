@@ -16,13 +16,14 @@ backtesting tooling can be used together or independently.
 | `kurumi-risk` | VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
 | `kurumi-portfolio` | Multi-asset panel alignment, return matrices, portfolio performance, risk decomposition, and rolling beta/correlation panels. |
 | `kurumi-backtest` | Order-book matching simulation, slippage and fee models, and position tracking. |
-| `kurumi-feed` | Asynchronous real-time market data: provider connectors, a resilience runtime, a multi-provider fan-out hub, and streaming OHLCV bar aggregation. |
+| `kurumi-feed` | Asynchronous real-time market data: Nasdaq TotalView-ITCH, NCDS REST, and Alpaca-compatible WebSocket adapters, a resilience runtime, a multi-provider fan-out hub, and streaming OHLCV bar aggregation. |
 | `kurumi` | Facade crate with feature-gated re-exports and the Python/WASM bindings. |
 
-The facade enables the whole synchronous library by default. Individual layers
-can be selected with Cargo features (`core`, `math`, `ta`, `pricing`, `risk`,
-`portfolio`, `backtest`), and `full` enables them all. `kurumi-feed` is an
-optional asynchronous branch that the facade does not pull in by default.
+The facade enables the whole library by default. Individual layers can be
+selected with Cargo features (`core`, `math`, `ta`, `pricing`, `risk`,
+`portfolio`, `backtest`, `feed`), and `full` enables them all. The `feed`
+feature pulls the asynchronous `kurumi-feed` branch (and Tokio); omit it with
+`--no-default-features` for a runtime-free synchronous build.
 
 ## Building
 
