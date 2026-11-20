@@ -20,7 +20,8 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 | `kurumi-risk` | Risk and performance analytics: VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
 | `kurumi-portfolio` | Multi-asset panel alignment, return matrices, portfolio performance and risk decomposition, rolling beta/correlation panels. |
 | `kurumi-backtest` | Strategy backtesting: order-book matching simulation, slippage and fee models, account/position tracking, and multi-asset portfolio backtesting under `portfolio`. |
-| `kurumi` | Top-level facade: re-exports the member crates behind Cargo features and hosts the Python/WASM bindings. |
+| `kurumi-feed` | Asynchronous real-time market data: provider connectors, a resilience runtime, a multi-provider fan-out hub, and streaming OHLCV bar aggregation. Depends only on `kurumi-core` and `kurumi-ta`. |
+| `kurumi` | Top-level facade: re-exports the synchronous member crates behind Cargo features and hosts the Python/WASM bindings. |
 
 ### Crate layering
 
@@ -28,14 +29,21 @@ Dependencies flow in one direction only:
 
 ```text
 kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-portfolio  <  kurumi-backtest  <  kurumi
+
+kurumi-core  <  kurumi-ta  <  kurumi-feed          (isolated asynchronous branch)
 ```
 
-A crate may depend only on crates that appear earlier in this list. `kurumi-ta`
-and `kurumi-pricing` are peers: neither may depend on the other. `kurumi-backtest`
-sits directly above `kurumi-portfolio` so multi-asset backtesting can consume the
-return panels and optimizers it defines; the dependency never points the other
-way. `kurumi-core` has no workspace dependencies. The `kurumi` facade depends on
-every member crate, and no member may depend on the facade.
+A synchronous crate may depend only on crates that appear earlier in the main
+chain. `kurumi-ta` and `kurumi-pricing` are peers: neither may depend on the
+other. `kurumi-backtest` sits directly above `kurumi-portfolio` so multi-asset
+backtesting can consume the return panels and optimizers it defines; the
+dependency never points the other way. `kurumi-core` has no workspace
+dependencies. `kurumi-feed` is an isolated asynchronous branch: it may depend on
+`kurumi-core` and `kurumi-ta`, but no synchronous crate may depend on it. The
+`kurumi` facade depends on every synchronous member crate, and no member may
+depend on the facade. `kurumi-feed` is not part of the default facade feature
+set; expose it, if ever, only behind an additive opt-in feature so a default
+`kurumi` build never pulls an async runtime.
 
 Crate boundaries are part of the public architecture: do not merge crates,
 introduce a new crate, or add an edge that reverses the layering without an
@@ -43,8 +51,8 @@ explicit architectural decision recorded in the PR.
 
 ## 3. Architectural Invariants
 
-- **Workspace structure**: maintain the eight crates and the one-way layering
-  above. No dependency cycles.
+- **Workspace structure**: maintain the nine crates and the one-way layering
+  above, including the isolated `kurumi-feed` branch. No dependency cycles.
 - **Dual numerical precision**:
   - Use `rust_decimal::Decimal` for currency amounts, ledger accounting, order
     prices, and discrete cashflows.
@@ -54,26 +62,29 @@ explicit architectural decision recorded in the PR.
     errors; never let them silently propagate.
 - **Zero-panic policy**: never use `.unwrap()`, `.expect()`, or array/slice
   indexing `[]` in library code. Every fallible operation must return
-  `Result<T, KurumiError>`. Use `get`, `checked_*`, and `try_*` APIs instead.
-  Assertions are appropriate in tests, not on library paths. Member crates deny
-  `clippy::unwrap_used`, `clippy::expect_used`, and
-  `clippy::indexing_slicing` outside `cfg(test)`; any scoped `#[allow(...)]`
-  needs a written justification.
+  `Result<T, KurumiError>` (or `Result<T, FeedError>` in `kurumi-feed`). Use
+  `get`, `checked_*`, and `try_*` APIs instead. Assertions are appropriate in
+  tests, not on library paths. Member crates deny `clippy::unwrap_used`,
+  `clippy::expect_used`, and `clippy::indexing_slicing` outside `cfg(test)`;
+  any scoped `#[allow(...)]` needs a written justification.
 - **Borrow checker simplicity**: prefer `Copy` value types (`Price`, `Rate`,
   `Date`, `Currency`) over complex reference lifetimes, and avoid
   self-referential structs.
 - **Error discipline**: `KurumiError` (in `kurumi-core`) is the single public
-  error type. Add variants with a descriptive `#[error("...")]` message, keep
-  the originating context, and do not leak dependency error types through
-  public APIs.
+  error type for the synchronous crates, and `FeedError` (in `kurumi-feed`) is
+  the single public error type for the asynchronous market-data layer. Add
+  variants with a descriptive `#[error("...")]` message, keep the originating
+  context, and do not leak dependency error types through public APIs.
 - **Safety**: library code is safe Rust. `unsafe_code` is denied workspace-wide;
   any unavoidable exception needs a scoped `#[allow(unsafe_code)]`, a `// SAFETY:`
   comment covering every invariant, and review justification.
-- **Facade features**: `kurumi` exposes each member behind an additive feature
-  (`core`, `math`, `ta`, `pricing`, `risk`, `portfolio`, `backtest`). Features
-  are additive: enabling one must not break another, and lower-layer features
-  are implied by higher-layer ones. Default features enable the whole library.
-  Keep the feature graph in sync with the crate layering.
+- **Facade features**: `kurumi` exposes each synchronous member behind an
+  additive feature (`core`, `math`, `ta`, `pricing`, `risk`, `portfolio`,
+  `backtest`). Features are additive: enabling one must not break another, and
+  lower-layer features are implied by higher-layer ones. Default features enable
+  the whole synchronous library. `kurumi-feed` stays outside the default feature
+  set so a default build never pulls an async runtime. Keep the feature graph in
+  sync with the crate layering.
 - **Bindings**: Python/WASM bindings live in `kurumi` behind dedicated opt-in
   features and must be thin adapters over the Rust API. Business logic never
   lives in binding code.
@@ -154,7 +165,59 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
   trades or recording equity before `eval_start_idx`, and IS parameter selection
   MUST NEVER observe any bar at or after `oos_start_idx`.
 
-## 7. Coding & Testing Standards
+## 7. Real-Time Market Data (`kurumi-feed`) Invariants
+
+`kurumi-feed` is the only asynchronous crate and the only place where a network
+runtime is allowed. It is an isolated branch of the dependency graph: it may
+depend on `kurumi-core` and `kurumi-ta`, and no synchronous crate may depend on
+it.
+
+- **Strict Async Isolation**: `tokio`, `tokio-tungstenite`, and `reqwest` MUST
+  ONLY be added to `kurumi-feed`. Never introduce async runtime dependencies
+  into `kurumi-core`, `kurumi-math`, `kurumi-ta`, `kurumi-pricing`,
+  `kurumi-risk`, `kurumi-portfolio`, or `kurumi-backtest` (including their
+  dev-dependencies). A default `kurumi` facade build MUST NOT pull a runtime.
+- **Pure Rust TLS**: Configure `tokio-tungstenite` and `reqwest` with `rustls`
+  (disabling default OpenSSL/native-tls) to ensure portable builds. Do not add
+  an OpenSSL or `native-tls` feature path.
+- **Untrusted Input Safety**: Network frames and binary ITCH buffers are
+  untrusted inputs. Never use `.unwrap()`, `.expect()`, or unchecked slice
+  indexing during parsing; validate lengths, bounds, and UTF-8 and return a
+  typed `FeedError`. A malformed frame MUST NOT panic a Tokio worker.
+- **Direct Decimal Decoding**: Decode exchange prices and quantities directly
+  into `rust_decimal::Decimal` (e.g., ITCH fixed-point integer prices via
+  `Decimal::new(val as i64, 4)` and JSON prices via string/decimal
+  deserialization) without routing through `f64`. The only `f64` boundary is
+  the `kurumi-ta` OHLCV input, after validation.
+- **Offline Deterministic CI**: All default `cargo test` suites MUST run
+  completely offline using local loopback mock WebSocket/HTTP servers and
+  embedded binary fixtures. Mark live external endpoint tests with `#[ignore]`
+  reading credentials strictly from environment variables.
+- **Connector Contract**: A provider implements `MarketDataConnector` only: it
+  publishes `MarketEvent`s, consumes `ConnectorCommand`s, and honours the
+  shutdown signal. Backoff, heartbeat supervision, and automatic
+  re-subscription belong to `ManagedConnector`; providers MUST NOT reimplement
+  them.
+- **Resilient Re-subscription**: The runtime owns the authoritative
+  `BTreeSet<Subscription>`. After a transient failure it MUST reconnect with
+  exponential backoff bounded by `max_backoff`, pass the complete active set to
+  the new session, and stop when `max_retries` is exhausted. Shutdown MUST drop
+  channels and tasks without leaking a provider task.
+- **Hub Fan-Out**: `MarketDataHub` routes by provider name or venue
+  deterministically (first registration wins for venue routing) and stores
+  routing tables in `BTreeMap`. Consumers receive independent broadcast streams:
+  a lagging consumer observes a `Lagged` count and MUST NOT block other
+  consumers or the provider.
+- **Bar Aggregation**: Align buckets from the exchange timestamp, keep prices,
+  volume, and turnover in `Decimal`, and finalize a bar only when its bucket
+  closes or an explicit flush is requested. Trades in an already-finalized
+  bucket are dropped as late; ordering inside a bucket follows the exchange
+  timestamp, not arrival order. Never present a partial bar as final.
+- **Dependency Hygiene**: Declare every async dependency version once in the
+  root `[workspace.dependencies]`; `kurumi-feed` inherits it and may only add
+  feature flags. Keep `Cargo.lock` committed.
+
+## 8. Coding & Testing Standards
 
 - Annotate hot-path math functions with `#[inline]`.
 - Document every public struct, trait, enum, function, and module with Rustdoc,
@@ -186,8 +249,11 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
   `cargo check -p kurumi --all-features`.
 - New public APIs require Rustdoc and tests in the same change. Do not commit
   commented-out code or dead modules.
+- Asynchronous tests in `kurumi-feed` use `#[tokio::test]` and the in-memory
+  `MockReplayProvider`; they must not depend on live endpoints or wall-clock
+  sleeps beyond a short bounded timeout.
 
-## 8. Dependency Management
+## 9. Dependency Management
 
 - Declare every external dependency version once in `[workspace.dependencies]`
   in the root `Cargo.toml`. Member manifests inherit it with
@@ -200,14 +266,18 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
   earns its place; small, well-understood numerical helpers belong in
   `kurumi-core` or `kurumi-math` instead.
 - Keep `Cargo.lock` committed so workspace builds are reproducible.
+- Async dependencies (`tokio`, `tokio-tungstenite`, `reqwest`, `futures-util`,
+  `bytes`, `serde_json`, `tracing`) are declared once in the workspace and may
+  be consumed only by `kurumi-feed`.
 
-## 9. Definition of Done
+## 10. Definition of Done
 
 A change is complete only when:
 
 1. `cargo fmt --all -- --check` passes.
 2. `cargo clippy --workspace --all-targets -- -D warnings` passes.
-3. `cargo test --workspace` passes, including the new benchmark tests.
+3. `cargo test --workspace` passes offline, including the new benchmark and
+   feed tests.
 4. `cargo doc --workspace --no-deps` builds without warnings.
 5. Every new public item is documented with formula, units, and examples.
 6. The crate layering and feature graph are unchanged, or the intentional change

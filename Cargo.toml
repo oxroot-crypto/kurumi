@@ -15,6 +15,7 @@ members = [
     "crates/kurumi-risk",
     "crates/kurumi-portfolio",
     "crates/kurumi-backtest",
+    "crates/kurumi-feed",
     "crates/kurumi",
 ]
 default-members = ["crates/kurumi"]
@@ -45,6 +46,7 @@ kurumi-pricing = { version = "0.1.0", path = "crates/kurumi-pricing" }
 kurumi-risk = { version = "0.1.0", path = "crates/kurumi-risk" }
 kurumi-portfolio = { version = "0.1.0", path = "crates/kurumi-portfolio" }
 kurumi-backtest = { version = "0.1.0", path = "crates/kurumi-backtest" }
+kurumi-feed = { version = "0.1.0", path = "crates/kurumi-feed" }
 
 # External crates. Versions are centrally managed here; members inherit them and
 # may only add feature flags on their own manifest.
@@ -58,6 +60,27 @@ nalgebra = "0.33"
 proptest = "1"
 rand = "0.9"
 rayon = "1"
+
+# Real-time market-data dependencies. `tokio`, `tokio-tungstenite`, and
+# `reqwest` are async-runtime dependencies and MUST stay confined to
+# `kurumi-feed`; see the "Real-Time Market Data" invariants in AGENTS.md.
+# Both networking crates use rustls so builds never need OpenSSL.
+tokio = { version = "1", features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+] }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+futures-util = "0.3"
+bytes = "1"
+serde_json = "1"
+tracing = "0.1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
