@@ -11,11 +11,13 @@
 //! | `risk` | `kurumi::risk` | `kurumi-risk` |
 //! | `portfolio` | `kurumi::portfolio` | `kurumi-portfolio` |
 //! | `backtest` | `kurumi::backtest` | `kurumi-backtest` |
+//! | `parallel` | `kurumi-backtest`'s Rayon switch | `kurumi-backtest` |
 //! | `full` | all of the above | every member crate |
 //!
-//! The default feature set is `full`, which enables every module. Features are
-//! additive and lower-layer features are implied by the features above them, so
-//! enabling `risk` also enables `core`, `math`, `ta`, and `pricing`.
+//! The default feature set is `full` plus `parallel`, which enables every module
+//! and the parallel parameter sweep. Features are additive and lower-layer
+//! features are implied by the features above them, so enabling `risk` also
+//! enables `core`, `math`, `ta`, and `pricing`.
 //!
 //! The [`prelude`] module re-exports the types and traits used most often in
 //! application code. Import it with `use kurumi::prelude::*;` after enabling the
@@ -135,13 +137,17 @@ pub mod prelude {
 
     #[cfg(feature = "backtest")]
     pub use kurumi_backtest::{
-        AllocationContext, AssetPosition, BacktestEngine, BacktestReport, BenchmarkComparison,
-        CalendarTrigger, CompositeTrigger, CustomAllocator, DriftTrigger, EquityPoint,
-        ExecutionTiming, FeeModel, Fill, FixedBpsSlippage, FixedRateFee, InsufficientDataPolicy,
-        Liquidity, MakerTakerFee, MarketSnapshot, MultiAssetAccount, MultiAssetFeed,
-        MultiAssetFill, NoFee, NoSlippage, Order, OrderKind, PortfolioAccount,
+        AlignedMarketData, AllocationContext, AssetPosition, BacktestEngine, BacktestReport,
+        BenchmarkComparison, CalendarTrigger, CompositeTrigger, CustomAllocator, DriftTrigger,
+        EquityPoint, ExecutionTiming, FeeModel, Fill, FixedBpsSlippage, FixedRateFee, FoldWindow,
+        GridSearchConfig, GridSearchResult, GridSearchRunner, GridTrial, InsufficientDataPolicy,
+        Liquidity, MakerTakerFee, MarketSlice, MarketSnapshot, MultiAssetAccount, MultiAssetFeed,
+        MultiAssetFill, NoFee, NoSlippage, ObjectiveMetric, Order, OrderKind, PortfolioAccount,
         PortfolioBacktestConfig, PortfolioBacktestEngine, PortfolioBacktestReport, RebalanceCause,
-        RebalanceEvent, RebalanceTrigger, RollingOptimizerAllocator, Side, SlippageModel,
-        StaticWeightAllocator, TargetWeightAllocator, TriggerContext, equity_returns,
+        RebalanceEvent, RebalanceTrigger, ResultFilter, RollingOptimizerAllocator, Side,
+        SlippageModel, StaticWeightAllocator, StrategySpec, TargetWeightAllocator, TrialStatus,
+        TrialSummary, TriggerContext, WalkForwardAnalyzer, WalkForwardConfig,
+        WalkForwardDiagnostics, WalkForwardFold, WalkForwardMode, WalkForwardReport,
+        equity_returns, generate_folds,
     };
 }
