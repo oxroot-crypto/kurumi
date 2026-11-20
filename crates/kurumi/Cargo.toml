@@ -24,7 +24,7 @@ approx = { workspace = true }
 rust_decimal = { workspace = true }
 
 [features]
-default = ["full"]
+default = ["full", "parallel"]
 core = ["dep:kurumi-core"]
 math = ["core", "dep:kurumi-math"]
 ta = ["math", "dep:kurumi-ta"]
@@ -32,6 +32,9 @@ pricing = ["math", "dep:kurumi-pricing"]
 risk = ["ta", "pricing", "dep:kurumi-risk"]
 portfolio = ["risk", "dep:kurumi-portfolio"]
 backtest = ["portfolio", "dep:kurumi-backtest"]
+# Forwards the `kurumi-backtest` Rayon switch. It is additive: enabling it also
+# enables the backtest module, and disabling default features keeps it off.
+parallel = ["backtest", "kurumi-backtest/parallel"]
 full = ["core", "math", "ta", "pricing", "risk", "portfolio", "backtest"]
 
 [lints]

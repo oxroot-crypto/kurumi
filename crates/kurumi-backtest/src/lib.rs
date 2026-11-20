@@ -16,8 +16,9 @@
 //! - [`portfolio`] adds deterministic multi-asset feeds, accounts, rebalance
 //!   triggers, allocators, the portfolio backtest engine, and attribution
 //!   reports without changing the single-asset APIs.
-//! - [`validation`] adds objective metrics, result filters, and a Rayon-parallel
-//!   parameter grid search over shared, zero-copy market slices.
+//! - [`validation`] adds objective metrics, result filters, a Rayon-parallel
+//!   parameter grid search over shared, zero-copy market slices, and walk-forward
+//!   analysis with compounded out-of-sample stitching.
 //!
 //! The `parallel` feature (enabled by default) gates `rayon` usage; without it
 //! the grid search falls back to sequential iteration.
@@ -91,8 +92,9 @@ pub use portfolio::{
 pub use report::{BacktestReport, equity_returns};
 pub use slippage::{FixedBpsSlippage, NoSlippage, SlippageModel};
 pub use validation::{
-    GridSearchConfig, GridSearchResult, GridSearchRunner, GridTrial, ObjectiveMetric, ResultFilter,
-    StrategySpec, TrialStatus, TrialSummary,
+    FoldWindow, GridSearchConfig, GridSearchResult, GridSearchRunner, GridTrial, ObjectiveMetric,
+    ResultFilter, StrategySpec, TrialStatus, TrialSummary, WalkForwardAnalyzer, WalkForwardConfig,
+    WalkForwardDiagnostics, WalkForwardFold, WalkForwardMode, WalkForwardReport, generate_folds,
 };
 
 pub use kurumi_core::KurumiError;
