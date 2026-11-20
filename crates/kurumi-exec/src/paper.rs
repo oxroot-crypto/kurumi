@@ -187,6 +187,14 @@ impl PaperMatchingEngine {
         self.working.keys()
     }
 
+    /// Returns the request of a working order.
+    #[must_use]
+    pub fn working_request(&self, client_order_id: &ClientOrderId) -> Option<&OrderRequest> {
+        self.working
+            .get(client_order_id)
+            .map(|working| &working.request)
+    }
+
     /// Returns the remaining quantity of a working order.
     #[must_use]
     pub fn remaining_qty(&self, client_order_id: &ClientOrderId) -> Option<Decimal> {

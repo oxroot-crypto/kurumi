@@ -12,6 +12,9 @@ use crate::order::Side;
 
 /// A model that maps a reference price to an execution price.
 ///
+/// Implementations must be `Send + Sync` so the paper matching engine can be
+/// hosted by an asynchronous broker.
+///
 /// # Examples
 ///
 /// ```
@@ -25,7 +28,7 @@ use crate::order::Side;
 /// # Ok(())
 /// # }
 /// ```
-pub trait SlippageModel {
+pub trait SlippageModel: Send + Sync {
     /// Returns the execution price for `reference_price` on `side`.
     ///
     /// # Errors

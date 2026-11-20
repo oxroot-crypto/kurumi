@@ -671,16 +671,22 @@ name = "kurumi-exec"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures-util",
  "kurumi-backtest",
  "kurumi-core",
+ "kurumi-feed",
  "kurumi-math",
  "kurumi-portfolio",
  "kurumi-risk",
  "kurumi-ta",
+ "reqwest",
  "rust_decimal",
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
 ]
 
 [[package]]

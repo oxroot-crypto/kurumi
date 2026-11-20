@@ -117,8 +117,9 @@ impl RiskContext {
 
 /// A pre-trade risk rule.
 ///
-/// `check` is called for every order; `on_accepted` is called only after every
-/// rule passed, which is the place to record rate-limit timestamps and seen
+/// Implementations must be `Send` so a [`RiskGate`] can be owned by the live
+/// runner. `check` is called for every order; `on_accepted` is called only after
+/// every rule passed, which is the place to record rate-limit timestamps and seen
 /// identifiers. `kill_switch_triggered` is polled by [`RiskGate`] before the
 /// rules run.
 ///
@@ -145,7 +146,7 @@ impl RiskContext {
 ///
 /// assert_eq!(AlwaysAllow.name(), "AlwaysAllow");
 /// ```
-pub trait RiskRule {
+pub trait RiskRule: Send {
     /// Returns the stable rule name recorded in journals and rejections.
     fn name(&self) -> &str;
 

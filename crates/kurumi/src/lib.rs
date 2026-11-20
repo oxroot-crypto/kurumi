@@ -12,6 +12,7 @@
 //! | `portfolio` | `kurumi::portfolio` | `kurumi-portfolio` |
 //! | `backtest` | `kurumi::backtest` | `kurumi-backtest` |
 //! | `exec` | `kurumi::exec` | `kurumi-exec` |
+//! | `exec-live` | `kurumi::exec` live broker/runner modules | `kurumi-exec` + `kurumi-feed` |
 //! | `feed` | `kurumi::feed` | `kurumi-feed` |
 //! | `parallel` | `kurumi-backtest`'s Rayon switch | `kurumi-backtest` |
 //! | `full` | all of the above | every member crate |
@@ -19,7 +20,8 @@
 //! The default feature set is `full` plus `parallel`, which enables every module
 //! and the parallel parameter sweep. Features are additive and lower-layer
 //! features are implied by the features above them, so enabling `risk` also
-//! enables `core`, `math`, `ta`, and `pricing`, and `exec` implies `backtest`. The `feed` feature already
+//! enables `core`, `math`, `ta`, and `pricing`, and `exec` implies `backtest`; `exec-live` additionally enables
+//! the asynchronous broker adapters and `kurumi-feed`. The `feed` feature already
 //! implies `ta`; a `--no-default-features` build that omits `feed` never links
 //! an asynchronous runtime.
 //!
@@ -177,5 +179,11 @@ pub mod prelude {
         ExecutionReport, MemoryJournal, OrderCommand, OrderRecord, OrderRequest, OrderSide,
         OrderStatus, OrderType, PaperMatchingEngine, PortfolioRebalanceStrategy, RiskGate,
         Strategy, StrategyContext, TimeInForce,
+    };
+
+    #[cfg(feature = "exec-live")]
+    pub use kurumi_exec::live::{
+        AlpacaTradingBroker, BrokerAccountSnapshot, BrokerPosition, ExecutionBroker, LiveConfig,
+        LiveRunner, LiveSessionSummary, PaperBroker,
     };
 }

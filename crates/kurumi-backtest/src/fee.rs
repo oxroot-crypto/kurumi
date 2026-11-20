@@ -37,7 +37,9 @@ pub enum Liquidity {
 /// A transaction-cost model.
 ///
 /// Implementations must return a non-negative fee and may use the side and the
-/// liquidity role to price different flow differently.
+/// liquidity role to price different flow differently. They must also be
+/// `Send + Sync`, because the paper brokerage can be driven from an
+/// asynchronous live runtime.
 ///
 /// # Examples
 ///
@@ -70,7 +72,7 @@ pub enum Liquidity {
 /// # Ok(())
 /// # }
 /// ```
-pub trait FeeModel {
+pub trait FeeModel: Send + Sync {
     /// Returns the fee for one fill in the quote currency.
     ///
     /// # Errors
