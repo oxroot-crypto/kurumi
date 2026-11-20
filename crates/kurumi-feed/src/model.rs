@@ -360,4 +360,51 @@ mod tests {
         let instrument = InstrumentId::new("AAPL", Venue::Nasdaq);
         assert_eq!(instrument.to_string(), "AAPL@NASDAQ");
     }
+
+    #[test]
+    fn event_variants_preserve_decimal_payloads_and_timestamps() {
+        let instrument = InstrumentId::new("AAPL", Venue::Nasdaq);
+        let ts = DateTime::<Utc>::UNIX_EPOCH;
+        let quote = QuoteTick {
+            instrument: instrument.clone(),
+            bid_price: Decimal::new(10_000, 2),
+            bid_size: Decimal::new(3, 0),
+            ask_price: Decimal::new(10_100, 2),
+            ask_size: Decimal::new(4, 0),
+            exchange_ts: ts,
+            received_ts: ts,
+        };
+        assert_eq!(quote.bid_price, Decimal::new(10_000, 2));
+        assert_eq!(quote.ask_size, Decimal::new(4, 0));
+
+        let delta = BookDelta {
+            instrument: instrument.clone(),
+            side: BookSide::Ask,
+            price: Decimal::new(10_100, 2),
+            size: Decimal::ZERO,
+            order_ref: Some(7),
+            exchange_ts: ts,
+            received_ts: ts,
+        };
+        assert_eq!(delta.side, BookSide::Ask);
+        assert_eq!(delta.size, Decimal::ZERO);
+        assert_eq!(delta.order_ref, Some(7));
+
+        let status = FeedStatusEvent {
+            provider: "mock".to_owned(),
+            state: ConnectionState::Authenticated,
+            message: Some("session accepted".to_owned()),
+            ts,
+        };
+        assert_eq!(status.state, ConnectionState::Authenticated);
+
+        let lagged = MarketEvent::Lagged {
+            provider: "mock".to_owned(),
+            skipped: 12,
+        };
+        match lagged {
+            MarketEvent::Lagged { skipped, .. } => assert_eq!(skipped, 12),
+            _ => panic!("expected a lagged event"),
+        }
+    }
 }

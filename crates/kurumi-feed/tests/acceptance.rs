@@ -178,12 +178,12 @@ async fn hub_fans_two_venues_out_to_two_subscribers_and_stops_cleanly() {
     )
     .await
     .expect("nasdaq subscription");
-    hub.subscribe(
-        "nyse-mock",
+    hub.subscribe_by_venue(
+        &Venue::Nyse,
         vec![Subscription::new(msft, vec![ChannelKind::Trades])],
     )
     .await
-    .expect("nyse subscription");
+    .expect("nyse venue subscription");
 
     let (first_ids, second_ids) = tokio::join!(
         timeout(Duration::from_secs(10), collect_trade_ids(&mut first, 12)),
