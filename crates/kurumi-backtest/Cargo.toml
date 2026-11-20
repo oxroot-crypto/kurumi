@@ -19,6 +19,11 @@ kurumi-risk = { workspace = true }
 kurumi-portfolio = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
+rayon = { workspace = true, optional = true }
+
+[features]
+default = ["parallel"]
+parallel = ["dep:rayon"]
 
 [dev-dependencies]
 approx = { workspace = true }

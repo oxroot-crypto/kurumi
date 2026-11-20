@@ -9,6 +9,10 @@
 //! All containers are [`BTreeMap`]s, which makes both the symbol order and the
 //! timeline order deterministic across runs.
 //!
+//! [`AlignedMarketData`] owns the finished timeline in reference-counted slices
+//! and [`MarketSlice`] borrows from it, so parallel parameter sweeps and
+//! walk-forward folds can share one immutable history without cloning bars.
+//!
 //! # Examples
 //!
 //! ```
@@ -33,6 +37,8 @@
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use kurumi_core::KurumiError;
@@ -353,6 +359,270 @@ impl IntoIterator for MultiAssetFeed {
     }
 }
 
+/// An owned, reference-counted market timeline shared by validation runs.
+///
+/// `AlignedMarketData` moves the aligned snapshots of a [`MultiAssetFeed`] into
+/// a single [`Arc`] slice and records the sorted instrument universe. A
+/// [`MarketSlice`] views a range of that immutable storage, so a parameter grid
+/// search or a walk-forward fold evaluates every strategy against the same bars
+/// without cloning the bar vector per parameter combination.
+///
+/// # Examples
+///
+/// ```
+/// use kurumi_backtest::portfolio::{AlignedMarketData, MultiAssetFeed};
+/// use kurumi_ta::OhlcvBar;
+/// use std::collections::BTreeMap;
+///
+/// # fn main() -> Result<(), kurumi_backtest::KurumiError> {
+/// let mut series = BTreeMap::new();
+/// series.insert(
+///     "AAA".to_owned(),
+///     vec![OhlcvBar::new(0, 10.0, 11.0, 9.0, 10.0, 1_000.0, 10_000.0)?],
+/// );
+/// let data = AlignedMarketData::from_feed(MultiAssetFeed::new(series)?);
+/// assert_eq!(data.len(), 1);
+/// assert_eq!(data.symbols(), ["AAA"]);
+/// assert_eq!(data.slice().timestamps().count(), 1);
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlignedMarketData {
+    snapshots: Arc<[MarketSnapshot]>,
+    symbols: Arc<[String]>,
+}
+
+impl AlignedMarketData {
+    /// Builds the shared timeline from `feed`.
+    ///
+    /// The feed is consumed so its snapshot vector moves into the
+    /// reference-counted slice instead of being cloned. The universe is the
+    /// sorted union of every symbol that appears on the timeline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kurumi_backtest::portfolio::{AlignedMarketData, MultiAssetFeed};
+    ///
+    /// # fn main() -> Result<(), kurumi_backtest::KurumiError> {
+    /// let data = AlignedMarketData::from_feed(MultiAssetFeed::new(
+    ///     std::collections::BTreeMap::new(),
+    /// )?);
+    /// assert!(data.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn from_feed(feed: MultiAssetFeed) -> Self {
+        let symbols = feed
+            .snapshots
+            .iter()
+            .flat_map(|snapshot| snapshot.bars.keys().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        Self {
+            snapshots: Arc::from(feed.snapshots),
+            symbols: Arc::from(symbols),
+        }
+    }
+
+    /// Returns the sorted instrument universe of the timeline.
+    #[must_use]
+    #[inline]
+    pub fn symbols(&self) -> &[String] {
+        &self.symbols
+    }
+
+    /// Returns the number of observations on the timeline.
+    #[must_use]
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.snapshots.len()
+    }
+
+    /// Returns `true` when the timeline has no observations.
+    #[must_use]
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.snapshots.is_empty()
+    }
+
+    /// Returns the owned snapshots as a plain slice.
+    #[must_use]
+    #[inline]
+    pub fn snapshots(&self) -> &[MarketSnapshot] {
+        &self.snapshots
+    }
+
+    /// Returns a zero-copy view over the whole timeline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kurumi_backtest::portfolio::{AlignedMarketData, MultiAssetFeed};
+    ///
+    /// # fn main() -> Result<(), kurumi_backtest::KurumiError> {
+    /// let data = AlignedMarketData::from_feed(MultiAssetFeed::new(
+    ///     std::collections::BTreeMap::new(),
+    /// )?);
+    /// assert!(data.slice().is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    #[inline]
+    pub fn slice(&self) -> MarketSlice<'_> {
+        MarketSlice::new(&self.snapshots)
+    }
+
+    /// Returns a zero-copy view over `range` of the timeline.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KurumiError::InvalidParameter`] when `range` is reversed or
+    /// extends past [`AlignedMarketData::len`].
+    #[must_use = "the range result must be handled"]
+    pub fn range(&self, range: Range<usize>) -> Result<MarketSlice<'_>, KurumiError> {
+        MarketSlice::new(&self.snapshots).slice(range)
+    }
+}
+
+/// A borrowed, zero-copy view over a contiguous run of market observations.
+///
+/// `MarketSlice` is a lightweight [`Copy`] wrapper around `&[MarketSnapshot]`.
+/// Slicing it only narrows the borrow: no snapshot, bar, price map, or symbol is
+/// cloned. Ranges are validated so callers never see a partially valid view.
+///
+/// # Examples
+///
+/// ```
+/// use kurumi_backtest::portfolio::{AlignedMarketData, MultiAssetFeed};
+/// use kurumi_ta::OhlcvBar;
+/// use std::collections::BTreeMap;
+///
+/// # fn main() -> Result<(), kurumi_backtest::KurumiError> {
+/// let mut series = BTreeMap::new();
+/// series.insert(
+///     "AAA".to_owned(),
+///     vec![
+///         OhlcvBar::new(0, 10.0, 11.0, 9.0, 10.0, 1_000.0, 10_000.0)?,
+///         OhlcvBar::new(86_400_000, 11.0, 12.0, 10.0, 11.5, 1_000.0, 11_000.0)?,
+///     ],
+/// );
+/// let data = AlignedMarketData::from_feed(MultiAssetFeed::new(series)?);
+/// let window = data.range(0..1)?;
+/// assert_eq!(window.len(), 1);
+/// assert!(data.range(1..3).is_err());
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MarketSlice<'a> {
+    snapshots: &'a [MarketSnapshot],
+}
+
+impl<'a> MarketSlice<'a> {
+    /// Creates a view over `snapshots`.
+    #[must_use]
+    #[inline]
+    pub const fn new(snapshots: &'a [MarketSnapshot]) -> Self {
+        Self { snapshots }
+    }
+
+    /// Returns the number of observations in the view.
+    #[must_use]
+    #[inline]
+    pub const fn len(&self) -> usize {
+        self.snapshots.len()
+    }
+
+    /// Returns `true` when the view has no observations.
+    #[must_use]
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.snapshots.is_empty()
+    }
+
+    /// Returns the borrowed observations.
+    #[must_use]
+    #[inline]
+    pub fn snapshots(&self) -> &'a [MarketSnapshot] {
+        self.snapshots
+    }
+
+    /// Returns observation `index`, or `None` when it is out of bounds.
+    #[must_use]
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<&'a MarketSnapshot> {
+        let snapshots: &'a [MarketSnapshot] = self.snapshots;
+        snapshots.get(index)
+    }
+
+    /// Returns a narrower zero-copy view over `range`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KurumiError::InvalidParameter`] when `range` is reversed or
+    /// extends past [`MarketSlice::len`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kurumi_backtest::portfolio::{AlignedMarketData, MultiAssetFeed};
+    ///
+    /// # fn main() -> Result<(), kurumi_backtest::KurumiError> {
+    /// let data = AlignedMarketData::from_feed(MultiAssetFeed::new(
+    ///     std::collections::BTreeMap::new(),
+    /// )?);
+    /// let window = data.slice().slice(0..0)?;
+    /// assert!(window.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn slice(&self, range: Range<usize>) -> Result<MarketSlice<'a>, KurumiError> {
+        let snapshots: &'a [MarketSnapshot] = self.snapshots;
+        let start = range.start;
+        let end = range.end;
+        let sliced = snapshots
+            .get(range)
+            .ok_or_else(|| KurumiError::InvalidParameter {
+                parameter: "range",
+                reason: format!(
+                    "{start}..{end} is outside the available ascending range 0..{}",
+                    snapshots.len()
+                ),
+            })?;
+        Ok(Self { snapshots: sliced })
+    }
+
+    /// Iterates over the observation timestamps in ascending order.
+    ///
+    /// The returned iterator borrows the underlying timeline and allocates
+    /// nothing.
+    #[inline]
+    pub fn timestamps(&self) -> impl Iterator<Item = DateTime<Utc>> + 'a {
+        let snapshots: &'a [MarketSnapshot] = self.snapshots;
+        snapshots.iter().map(MarketSnapshot::timestamp)
+    }
+
+    /// Iterates over the borrowed observations in ascending time order.
+    #[inline]
+    pub fn iter(&self) -> std::slice::Iter<'a, MarketSnapshot> {
+        self.snapshots.iter()
+    }
+}
+
+impl<'a> IntoIterator for MarketSlice<'a> {
+    type Item = &'a MarketSnapshot;
+    type IntoIter = std::slice::Iter<'a, MarketSnapshot>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.snapshots.iter()
+    }
+}
+
 /// Converts an OHLCV `f64` price into the decimal ledger.
 ///
 /// OHLCV bars are already validated as finite and strictly positive, so the
@@ -489,5 +759,55 @@ mod tests {
         let snapshot = MarketSnapshot::new(timestamp, bars).expect("valid snapshot");
         let prices = snapshot.close_prices().expect("convertible prices");
         assert_eq!(prices.get("AAA"), Some(&Decimal::new(1_005, 1)));
+    }
+
+    #[test]
+    fn aligned_market_data_exposes_sorted_symbols_and_zero_copy_windows() {
+        let mut input = BTreeMap::new();
+        input.insert("BBB".to_owned(), series(&[(0, 20.0), (2 * DAY, 22.0)]));
+        input.insert("AAA".to_owned(), series(&[(DAY, 10.0), (2 * DAY, 12.0)]));
+        let feed = MultiAssetFeed::new(input).expect("valid feed");
+        let data = AlignedMarketData::from_feed(feed);
+
+        assert_eq!(data.symbols(), ["AAA", "BBB"]);
+        assert_eq!(data.len(), 3);
+        assert!(!data.is_empty());
+        assert_eq!(data.snapshots().len(), 3);
+
+        let window = data.range(1..3).expect("valid window");
+        assert_eq!(window.len(), 2);
+        assert_eq!(window.timestamps().count(), 2);
+        assert_eq!(window.iter().count(), 2);
+        assert_eq!(window.into_iter().count(), 2);
+        assert_eq!(
+            window
+                .get(0)
+                .map(|snapshot| snapshot.timestamp().timestamp_millis()),
+            Some(DAY)
+        );
+        assert!(window.get(2).is_none());
+
+        // The window points into the same allocation: slicing cloned nothing.
+        assert!(std::ptr::eq(
+            window.get(0).expect("first window snapshot"),
+            data.snapshots().get(1).expect("second data snapshot"),
+        ));
+
+        assert_eq!(window.slice(1..2).expect("nested window").len(), 1);
+        assert!(window.slice(0..3).is_err());
+        let reversed_start = 2;
+        let reversed_end = 1;
+        assert!(data.range(reversed_start..reversed_end).is_err());
+        assert!(data.range(0..4).is_err());
+    }
+
+    #[test]
+    fn empty_aligned_market_data_has_no_symbols() {
+        let data =
+            AlignedMarketData::from_feed(MultiAssetFeed::new(BTreeMap::new()).expect("empty feed"));
+        assert!(data.is_empty());
+        assert!(data.symbols().is_empty());
+        assert!(data.slice().is_empty());
+        assert_eq!(data.slice().timestamps().count(), 0);
     }
 }

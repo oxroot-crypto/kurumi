@@ -24,6 +24,15 @@
 //! buffer. This keeps a suspended instrument in the book without inventing a
 //! quote for it.
 //!
+//! # Warmup
+//!
+//! [`PortfolioBacktestEngine::run_on_slice`] accepts a warmup prefix. Bars
+//! before `warmup_bars` update the account's last known prices and the rolling
+//! price history only: no trigger is consulted, no order is generated, and no
+//! equity or weight observation is recorded. The first evaluated bar can
+//! therefore consume the whole warmup history for its initial allocation
+//! without a cold start, and the reported curves begin at that bar.
+//!
 //! # Sell-before-buy
 //!
 //! Sells are settled first, then the buy basket is checked against the cash that
@@ -103,7 +112,9 @@ use crate::fee::{FeeModel, Liquidity};
 use crate::order::Side;
 use crate::portfolio::account::{MultiAssetAccount, MultiAssetFill};
 use crate::portfolio::allocator::{AllocationContext, TargetWeightAllocator};
-use crate::portfolio::feed::{MarketSnapshot, MultiAssetFeed, decimal_from_f64};
+use crate::portfolio::feed::{
+    AlignedMarketData, MarketSlice, MarketSnapshot, MultiAssetFeed, decimal_from_f64,
+};
 use crate::portfolio::report::{PortfolioBacktestReport, RebalanceEvent};
 use crate::portfolio::trigger::{RebalanceCause, RebalanceTrigger, TriggerContext};
 use crate::slippage::SlippageModel;
@@ -376,11 +387,13 @@ impl PortfolioBacktestEngine {
         &self.config
     }
 
-    /// Runs the backtest over `feed`.
+    /// Runs the backtest over `feed` with no warmup prefix.
     ///
     /// The method is deterministic: every price, position, and weight container
     /// is a [`BTreeMap`], so repeated runs over the same inputs produce identical
-    /// reports.
+    /// reports. Internally the feed is moved into an [`AlignedMarketData`] and
+    /// evaluated by [`PortfolioBacktestEngine::run_on_slice`] with
+    /// `warmup_bars = 0`, so both entry points share one execution path.
     ///
     /// # Errors
     ///
@@ -398,19 +411,108 @@ impl PortfolioBacktestEngine {
         trigger: &dyn RebalanceTrigger,
         allocator: &mut dyn TargetWeightAllocator,
     ) -> Result<PortfolioBacktestReport, KurumiError> {
-        if feed.is_empty() {
+        let data = AlignedMarketData::from_feed(feed);
+        self.run_on_slice(data.slice(), 0, trigger, allocator)
+    }
+
+    /// Runs the backtest over a borrowed window of aligned market data.
+    ///
+    /// `data` is a zero-copy [`MarketSlice`], so several engines can evaluate
+    /// different strategies or parameter sets against the same immutable
+    /// timeline without cloning the underlying snapshots.
+    ///
+    /// # Warmup
+    ///
+    /// The first `warmup_bars` observations are a warmup prefix. For them the
+    /// engine only marks the account to market and appends the bars to the
+    /// rolling price history: no trigger is consulted, no order is generated,
+    /// and neither [`PortfolioBacktestReport::equity_curve`] nor
+    /// [`PortfolioBacktestReport::weight_history`] receives an entry. Evaluation
+    /// starts at index `warmup_bars`, whose initial allocation can use the whole
+    /// warmup history, and every reported curve therefore has length
+    /// `data.len() - warmup_bars`. Trigger bar counters
+    /// ([`TriggerContext::bars_advanced`] and
+    /// [`TriggerContext::last_rebalance_bar`]) are relative to that first
+    /// evaluated bar, so the evaluated segment behaves like a standalone
+    /// backtest with a pre-populated history.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KurumiError::InsufficientData`] for an empty slice or fewer
+    /// than three evaluated observations, [`KurumiError::InvalidParameter`] when
+    /// `warmup_bars` is not smaller than the slice length or a quote or
+    /// allocation is malformed, and propagates account, fee, slippage,
+    /// optimizer, and risk errors.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kurumi_backtest::portfolio::{
+    ///     AlignedMarketData, CalendarTrigger, MarketSnapshot, MultiAssetFeed,
+    ///     PortfolioBacktestConfig, PortfolioBacktestEngine, StaticWeightAllocator,
+    /// };
+    /// use kurumi_backtest::{NoFee, NoSlippage};
+    /// use kurumi_ta::OhlcvBar;
+    /// use rust_decimal::Decimal;
+    /// use std::collections::BTreeMap;
+    ///
+    /// # fn main() -> Result<(), kurumi_backtest::KurumiError> {
+    /// let day = 86_400_000_i64;
+    /// let mut series = BTreeMap::new();
+    /// let bars = (0..8)
+    ///     .map(|index| {
+    ///         OhlcvBar::new(
+    ///             index * day,
+    ///             100.0 + index as f64,
+    ///             101.0 + index as f64,
+    ///             99.0 + index as f64,
+    ///             100.0 + index as f64,
+    ///             1_000.0,
+    ///             100_000.0,
+    ///         )
+    ///     })
+    ///     .collect::<Result<Vec<_>, _>>()?;
+    /// series.insert("AAA".to_owned(), bars);
+    /// let data = AlignedMarketData::from_feed(MultiAssetFeed::new(series)?);
+    ///
+    /// let config = PortfolioBacktestConfig::new(Decimal::from(10_000))?;
+    /// let mut engine = PortfolioBacktestEngine::new(config, Box::new(NoFee), Box::new(NoSlippage))?;
+    /// let mut allocator = StaticWeightAllocator::new(BTreeMap::from([("AAA".to_owned(), 1.0)]))?;
+    /// let report = engine.run_on_slice(data.slice(), 3, &CalendarTrigger::Monthly, &mut allocator)?;
+    /// assert_eq!(report.equity_curve.len(), 5);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn run_on_slice(
+        &mut self,
+        data: MarketSlice<'_>,
+        warmup_bars: usize,
+        trigger: &dyn RebalanceTrigger,
+        allocator: &mut dyn TargetWeightAllocator,
+    ) -> Result<PortfolioBacktestReport, KurumiError> {
+        if data.is_empty() {
             return Err(KurumiError::InsufficientData {
                 required: 1,
                 available: 0,
             });
         }
+        if warmup_bars >= data.len() {
+            return Err(KurumiError::InvalidParameter {
+                parameter: "warmup_bars",
+                reason: format!(
+                    "must be smaller than the {} observations in the market slice",
+                    data.len()
+                ),
+            });
+        }
         self.config.validate()?;
 
+        let evaluated_bars = data.len() - warmup_bars;
         let mut account = MultiAssetAccount::new(self.config.initial_cash)?;
         let mut price_history: BTreeMap<String, Vec<(DateTime<Utc>, f64)>> = BTreeMap::new();
         let mut active_symbols: BTreeSet<String> = BTreeSet::new();
-        let mut equity_curve = Vec::with_capacity(feed.len());
-        let mut weight_history = Vec::with_capacity(feed.len());
+        let mut equity_curve = Vec::with_capacity(evaluated_bars);
+        let mut weight_history = Vec::with_capacity(evaluated_bars);
         let mut rebalance_events: Vec<RebalanceEvent> = Vec::new();
         let mut pending: Option<PendingRebalance> = None;
         let mut last_target_weights = BTreeMap::new();
@@ -419,7 +521,20 @@ impl PortfolioBacktestEngine {
         let mut total_turnover = 0.0;
         let mut min_cash = self.config.initial_cash;
 
-        for (index, snapshot) in feed.iter().enumerate() {
+        for (index, snapshot) in data.iter().enumerate() {
+            if index < warmup_bars {
+                account.update_market_prices(snapshot)?;
+                for (symbol, bar) in snapshot.bars() {
+                    active_symbols.insert(symbol.clone());
+                    price_history
+                        .entry(symbol.clone())
+                        .or_default()
+                        .push((snapshot.timestamp(), bar.close()));
+                }
+                continue;
+            }
+
+            let evaluation_index = index - warmup_bars;
             let mut executed_pending: Option<(PendingRebalance, ExecutionSummary)> = None;
             if let Some(pending_rebalance) = pending.take() {
                 let summary = execute_orders(
@@ -456,7 +571,7 @@ impl PortfolioBacktestEngine {
             let context = TriggerContext {
                 current_timestamp: snapshot.timestamp(),
                 last_rebalance_timestamp,
-                bars_advanced: index,
+                bars_advanced: evaluation_index,
                 last_rebalance_bar,
                 current_weights,
                 target_weights: last_target_weights.clone(),
@@ -490,7 +605,7 @@ impl PortfolioBacktestEngine {
 
                 last_target_weights = plan.target_weights.clone();
                 last_rebalance_timestamp = Some(snapshot.timestamp());
-                last_rebalance_bar = Some(index);
+                last_rebalance_bar = Some(evaluation_index);
 
                 if orders.is_empty() {
                     let summary = ExecutionSummary::default();
@@ -1131,10 +1246,14 @@ fn execute_orders(
 mod tests {
     use super::*;
     use crate::fee::{FixedRateFee, NoFee};
-    use crate::portfolio::allocator::StaticWeightAllocator;
+    use crate::portfolio::allocator::{RollingOptimizerAllocator, StaticWeightAllocator};
     use crate::portfolio::trigger::CalendarTrigger;
     use crate::slippage::NoSlippage;
+    use kurumi_math::SampleCovariance;
+    use kurumi_portfolio::InverseVolatility;
     use kurumi_ta::OhlcvBar;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     const DAY: i64 = 86_400_000;
 
@@ -1312,5 +1431,124 @@ mod tests {
         config.cash_buffer_ratio = Decimal::ZERO;
         config.lookback_window = 0;
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn warmup_prefix_populates_history_without_trading_then_optimizes_immediately() {
+        const TOTAL_BARS: usize = 120;
+        const WARMUP_BARS: usize = 60;
+
+        let mut series = BTreeMap::new();
+        series.insert(
+            "AAA".to_owned(),
+            (0..TOTAL_BARS)
+                .map(|day| bar(day as i64, 100.0 + day as f64 * 0.5))
+                .collect::<Vec<_>>(),
+        );
+        series.insert(
+            "BBB".to_owned(),
+            (0..TOTAL_BARS)
+                .map(|day| bar(day as i64, if day % 2 == 0 { 50.0 } else { 60.0 }))
+                .collect::<Vec<_>>(),
+        );
+        let data = AlignedMarketData::from_feed(MultiAssetFeed::new(series).expect("valid feed"));
+
+        let mut config =
+            PortfolioBacktestConfig::new(Decimal::from(100_000)).expect("valid config");
+        config.lookback_window = WARMUP_BARS;
+        let mut engine =
+            PortfolioBacktestEngine::new(config, Box::new(NoFee), Box::new(NoSlippage))
+                .expect("valid engine");
+
+        let allocations: Rc<RefCell<Vec<(usize, kurumi_portfolio::PortfolioWeights)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let mut allocator = RecordingAllocator {
+            inner: RollingOptimizerAllocator::new(SampleCovariance, InverseVolatility::new())
+                .with_min_lookback_periods(WARMUP_BARS)
+                .expect("valid lookback"),
+            allocations: Rc::clone(&allocations),
+        };
+        let trigger = CalendarTrigger::fixed_interval(30).expect("valid interval");
+        let report = engine
+            .run_on_slice(data.slice(), WARMUP_BARS, &trigger, &mut allocator)
+            .expect("backtest");
+
+        assert_eq!(report.equity_curve.len(), TOTAL_BARS - WARMUP_BARS);
+        assert_eq!(report.weight_history.len(), TOTAL_BARS - WARMUP_BARS);
+        assert_eq!(
+            report
+                .equity_curve
+                .first()
+                .map(|(timestamp, _)| timestamp.timestamp_millis()),
+            Some(WARMUP_BARS as i64 * DAY),
+            "the reported curve must start on the first evaluated bar"
+        );
+        assert!(
+            report
+                .rebalance_events
+                .iter()
+                .all(|event| event.timestamp.timestamp_millis() >= WARMUP_BARS as i64 * DAY),
+            "no rebalance may happen during warmup"
+        );
+        assert_eq!(
+            report.rebalance_events.first().map(|event| event.cause),
+            Some(RebalanceCause::Initial)
+        );
+
+        let allocations = allocations.borrow();
+        let (first_count, first_weights) = allocations.first().expect("initial allocation");
+        assert_eq!(
+            *first_count, WARMUP_BARS,
+            "the initial allocation must consume the whole warmup return history"
+        );
+        let aaa = first_weights.weight("AAA").expect("AAA weight");
+        assert!(
+            (aaa - 0.5).abs() > 0.05,
+            "the rolling optimizer must run instead of the equal-weight fallback, got {aaa}"
+        );
+    }
+
+    #[test]
+    fn run_on_slice_rejects_warmup_that_consumes_the_whole_slice() {
+        let feed = feed(&[("AAA", &[100.0, 101.0, 102.0, 103.0])]);
+        let data = AlignedMarketData::from_feed(feed);
+        let mut engine = engine(Box::new(NoFee));
+        let mut allocator = StaticWeightAllocator::new(BTreeMap::from([("AAA".to_owned(), 1.0)]))
+            .expect("valid allocator");
+        assert!(
+            engine
+                .run_on_slice(
+                    data.slice(),
+                    data.len(),
+                    &CalendarTrigger::Monthly,
+                    &mut allocator
+                )
+                .is_err()
+        );
+        let empty =
+            AlignedMarketData::from_feed(MultiAssetFeed::new(BTreeMap::new()).expect("empty feed"));
+        assert!(
+            engine
+                .run_on_slice(empty.slice(), 0, &CalendarTrigger::Monthly, &mut allocator)
+                .is_err()
+        );
+    }
+
+    struct RecordingAllocator {
+        inner: RollingOptimizerAllocator<SampleCovariance, InverseVolatility>,
+        allocations: Rc<RefCell<Vec<(usize, kurumi_portfolio::PortfolioWeights)>>>,
+    }
+
+    impl TargetWeightAllocator for RecordingAllocator {
+        fn allocate(
+            &mut self,
+            ctx: &AllocationContext,
+        ) -> Result<kurumi_portfolio::PortfolioWeights, KurumiError> {
+            let weights = self.inner.allocate(ctx)?;
+            self.allocations
+                .borrow_mut()
+                .push((ctx.return_count(), weights.clone()));
+            Ok(weights)
+        }
     }
 }

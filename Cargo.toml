@@ -57,6 +57,7 @@ libm = "0.2"
 nalgebra = "0.33"
 proptest = "1"
 rand = "0.9"
+rayon = "1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

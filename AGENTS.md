@@ -135,7 +135,26 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
   and portfolio equity MUST remain `rust_decimal::Decimal`. Convert to `f64`
   only when constructing `ReturnMatrix` for `kurumi-portfolio` optimizers.
 
-## 6. Coding & Testing Standards
+## 6. Parallel Validation & Walk-Forward Invariants
+
+- **Feature-Gated Parallelism**: Gate all `rayon` usage behind
+  `#[cfg(feature = "parallel")]` in `kurumi-backtest`, with sequential iterator
+  fallbacks when the feature is disabled. Verify both `--all-features` and
+  `--no-default-features` compile cleanly.
+- **Zero-Copy Shared Market Data**: Parallel grid search and Walk-Forward folds
+  MUST borrow immutable slices (`&[MarketSnapshot]`) backed by
+  `AlignedMarketData` rather than cloning historical bar vectors per parameter
+  combination.
+- **Strict Determinism**: Parameter ranking and best-parameter selection MUST
+  filter out non-finite (`NaN`/`Infinite`) scores and break ties deterministically
+  by original grid index so parallel and sequential runs produce bit-for-bit
+  identical winners.
+- **No OOS Cold-Start & No Look-Ahead**: Walk-Forward OOS evaluation MUST support
+  warmup prefix bars that populate indicator/lookback buffers without placing
+  trades or recording equity before `eval_start_idx`, and IS parameter selection
+  MUST NEVER observe any bar at or after `oos_start_idx`.
+
+## 7. Coding & Testing Standards
 
 - Annotate hot-path math functions with `#[inline]`.
 - Document every public struct, trait, enum, function, and module with Rustdoc,
@@ -168,7 +187,7 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
 - New public APIs require Rustdoc and tests in the same change. Do not commit
   commented-out code or dead modules.
 
-## 7. Dependency Management
+## 8. Dependency Management
 
 - Declare every external dependency version once in `[workspace.dependencies]`
   in the root `Cargo.toml`. Member manifests inherit it with
@@ -182,7 +201,7 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
   `kurumi-core` or `kurumi-math` instead.
 - Keep `Cargo.lock` committed so workspace builds are reproducible.
 
-## 8. Definition of Done
+## 9. Definition of Done
 
 A change is complete only when:
 
