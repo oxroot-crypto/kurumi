@@ -516,6 +516,11 @@ impl GridSearchRunner {
     /// the affected trial as [`TrialStatus::Failed`] and keeps the remaining
     /// trials running.
     ///
+    /// When [`GridSearchConfig::retain_all_reports`] is `false`, only summaries
+    /// are kept during the sweep and the winning trial is re-evaluated once so
+    /// its complete report can be retained, which doubles the cost of that one
+    /// trial while keeping peak memory bounded.
+    ///
     /// # Errors
     ///
     /// Returns [`KurumiError::InsufficientData`] for an empty slice,
