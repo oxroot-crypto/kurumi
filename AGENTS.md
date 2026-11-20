@@ -20,6 +20,7 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 | `kurumi-risk` | Risk and performance analytics: VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
 | `kurumi-portfolio` | Multi-asset panel alignment, return matrices, portfolio performance and risk decomposition, rolling beta/correlation panels. |
 | `kurumi-backtest` | Strategy backtesting: order-book matching simulation, slippage and fee models, account/position tracking, and multi-asset portfolio backtesting under `portfolio`. |
+| `kurumi-exec` | Synchronous execution kernel: order state machine, reservation ledger, pre-trade risk gate, paper matching, audit journal, and backtest runner. Sans-I/O: no runtime or network dependency. |
 | `kurumi-feed` | Asynchronous real-time market data: provider connectors, a resilience runtime, a multi-provider fan-out hub, and streaming OHLCV bar aggregation. Depends only on `kurumi-core` and `kurumi-ta`. |
 | `kurumi` | Top-level facade: re-exports the synchronous member crates behind Cargo features and hosts the Python/WASM bindings. |
 
@@ -28,7 +29,7 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 Dependencies flow in one direction only:
 
 ```text
-kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-portfolio  <  kurumi-backtest  <  kurumi
+kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-portfolio  <  kurumi-backtest  <  kurumi-exec  <  kurumi
 
 kurumi-core  <  kurumi-ta  <  kurumi-feed          (isolated asynchronous branch)
 ```
@@ -37,8 +38,11 @@ A synchronous crate may depend only on crates that appear earlier in the main
 chain. `kurumi-ta` and `kurumi-pricing` are peers: neither may depend on the
 other. `kurumi-backtest` sits directly above `kurumi-portfolio` so multi-asset
 backtesting can consume the return panels and optimizers it defines; the
-dependency never points the other way. `kurumi-core` has no workspace
-dependencies. `kurumi-feed` is an isolated asynchronous branch: it may depend on
+dependency never points the other way. `kurumi-exec` sits directly above
+`kurumi-backtest`: it consumes the fee, slippage, rebalance, and allocator
+abstractions but never introduces an edge downward or an asynchronous
+dependency. `kurumi-core` has no workspace dependencies. `kurumi-feed` is an
+isolated asynchronous branch: it may depend on
 `kurumi-core` and `kurumi-ta`, but no synchronous crate may depend on it. The
 `kurumi` facade depends on every synchronous member crate, and no member may
 depend on the facade. `kurumi-feed` is not part of the default facade feature
@@ -51,7 +55,7 @@ explicit architectural decision recorded in the PR.
 
 ## 3. Architectural Invariants
 
-- **Workspace structure**: maintain the nine crates and the one-way layering
+- **Workspace structure**: maintain the ten crates and the one-way layering
   above, including the isolated `kurumi-feed` branch. No dependency cycles.
 - **Dual numerical precision**:
   - Use `rust_decimal::Decimal` for currency amounts, ledger accounting, order
@@ -80,7 +84,7 @@ explicit architectural decision recorded in the PR.
   comment covering every invariant, and review justification.
 - **Facade features**: `kurumi` exposes each synchronous member behind an
   additive feature (`core`, `math`, `ta`, `pricing`, `risk`, `portfolio`,
-  `backtest`). Features are additive: enabling one must not break another, and
+  `backtest`, `exec`). Features are additive: enabling one must not break another, and
   lower-layer features are implied by higher-layer ones. Default features enable
   the whole synchronous library. `kurumi-feed` stays outside the default feature
   set so a default build never pulls an async runtime. Keep the feature graph in
@@ -175,8 +179,8 @@ it.
 - **Strict Async Isolation**: `tokio`, `tokio-tungstenite`, and `reqwest` MUST
   ONLY be added to `kurumi-feed`. Never introduce async runtime dependencies
   into `kurumi-core`, `kurumi-math`, `kurumi-ta`, `kurumi-pricing`,
-  `kurumi-risk`, `kurumi-portfolio`, or `kurumi-backtest` (including their
-  dev-dependencies). A default `kurumi` facade build MUST NOT pull a runtime.
+  `kurumi-risk`, `kurumi-portfolio`, `kurumi-backtest`, or `kurumi-exec`
+  (including their dev-dependencies). A default `kurumi` facade build MUST NOT pull a runtime.
 - **Pure Rust TLS**: Configure `tokio-tungstenite` and `reqwest` with `rustls`
   (disabling default OpenSSL/native-tls) to ensure portable builds. Do not add
   an OpenSSL or `native-tls` feature path.
@@ -217,7 +221,15 @@ it.
   root `[workspace.dependencies]`; `kurumi-feed` inherits it and may only add
   feature flags. Keep `Cargo.lock` committed.
 
-## 8. Coding & Testing Standards
+## 8. Unified Execution & Paper Trading (`kurumi-exec`) Invariants
+
+- **Sans-I/O Strategy Core**: The `Strategy` trait, `RiskGate`, `ExecutionLedger`, and `PaperMatchingEngine` MUST be 100% synchronous and free of `tokio` or network dependencies. All async runtime and broker HTTP/WS code MUST be gated behind `#[cfg(feature = "live")]`.
+- **Deterministic Clock & IDs**: Strategies, risk rules, and paper matching MUST NEVER call `Utc::now()` or random UUID generators directly; always read timestamps from `StrategyContext::now()` and generate deterministic `ClientOrderId`s so backtest and replay runs are bit-for-bit reproducible.
+- **Asset Reservation Accounting**: `ExecutionLedger` MUST track `reserved_cash` for open buy orders and `reserved_qty` per symbol for open sell orders. Reject any new order that exceeds available (unreserved) cash or long quantity (unless shorting is explicitly enabled).
+- **Strict Order FSM & Idempotency**: Enforce valid order state transitions (`PendingSubmit` -> `Open` -> `PartiallyFilled` -> `Filled` / `Canceled` / `Rejected`) and deduplicate fills by `exec_id`. Never apply the same fill twice.
+- **Backtest-Live Parity**: Running the exact same `Strategy` struct through `BacktestRunner` and through `LiveRunner` + `PaperBroker` fed with identical bar/tick events MUST produce bit-for-bit identical fills, fees, and final `Decimal` equity.
+
+## 9. Coding & Testing Standards
 
 - Annotate hot-path math functions with `#[inline]`.
 - Document every public struct, trait, enum, function, and module with Rustdoc,
@@ -253,7 +265,7 @@ it.
   `MockReplayProvider`; they must not depend on live endpoints or wall-clock
   sleeps beyond a short bounded timeout.
 
-## 9. Dependency Management
+## 10. Dependency Management
 
 - Declare every external dependency version once in `[workspace.dependencies]`
   in the root `Cargo.toml`. Member manifests inherit it with
@@ -267,10 +279,12 @@ it.
   `kurumi-core` or `kurumi-math` instead.
 - Keep `Cargo.lock` committed so workspace builds are reproducible.
 - Async dependencies (`tokio`, `tokio-tungstenite`, `reqwest`, `futures-util`,
-  `bytes`, `serde_json`, `tracing`) are declared once in the workspace and may
-  be consumed only by `kurumi-feed`.
+  `bytes`, `tracing`) are declared once in the workspace and may be consumed
+  only by `kurumi-feed`. `serde` and `serde_json` are synchronous data
+  dependencies and may additionally be consumed by `kurumi-exec` for its JSONL
+  audit journal.
 
-## 10. Definition of Done
+## 11. Definition of Done
 
 A change is complete only when:
 

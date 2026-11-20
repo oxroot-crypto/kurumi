@@ -631,6 +631,7 @@ dependencies = [
  "approx",
  "kurumi-backtest",
  "kurumi-core",
+ "kurumi-exec",
  "kurumi-feed",
  "kurumi-math",
  "kurumi-portfolio",
@@ -662,6 +663,23 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "rust_decimal",
+ "thiserror",
+]
+
+[[package]]
+name = "kurumi-exec"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "kurumi-backtest",
+ "kurumi-core",
+ "kurumi-math",
+ "kurumi-portfolio",
+ "kurumi-risk",
+ "kurumi-ta",
+ "rust_decimal",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -1328,6 +1346,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
+ "serde_derive",
 ]
 
 [[package]]

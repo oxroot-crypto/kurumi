@@ -18,6 +18,7 @@ kurumi-pricing = { workspace = true, optional = true }
 kurumi-risk = { workspace = true, optional = true }
 kurumi-portfolio = { workspace = true, optional = true }
 kurumi-backtest = { workspace = true, optional = true }
+kurumi-exec = { workspace = true, optional = true }
 kurumi-feed = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -33,6 +34,7 @@ pricing = ["math", "dep:kurumi-pricing"]
 risk = ["ta", "pricing", "dep:kurumi-risk"]
 portfolio = ["risk", "dep:kurumi-portfolio"]
 backtest = ["portfolio", "dep:kurumi-backtest"]
+exec = ["backtest", "dep:kurumi-exec"]
 # Real-time market data. Included in `full` per the Nasdaq integration request;
 # a `--no-default-features` build omits it and never links Tokio.
 feed = ["dep:kurumi-feed", "ta"]
@@ -47,6 +49,7 @@ full = [
     "risk",
     "portfolio",
     "backtest",
+    "exec",
     "feed",
 ]
 
