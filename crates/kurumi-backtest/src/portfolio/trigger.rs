@@ -79,6 +79,33 @@ pub struct TriggerContext {
     pub target_weights: BTreeMap<String, f64>,
 }
 
+/// The origin of a rebalance decision, recorded in the audit trail.
+///
+/// Built-in triggers report their own kind through [`RebalanceTrigger::cause`],
+/// and [`CompositeTrigger`] reports the first child that fired. A custom
+/// implementation keeps the default [`RebalanceCause::Custom`].
+///
+/// # Examples
+///
+/// ```
+/// use kurumi_backtest::portfolio::RebalanceCause;
+///
+/// assert_ne!(RebalanceCause::Calendar, RebalanceCause::Drift);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RebalanceCause {
+    /// The first rebalance of the backtest, establishing the initial book.
+    Initial,
+    /// A calendar- or interval-based schedule.
+    Calendar,
+    /// A weight-drift threshold.
+    Drift,
+    /// A composite trigger whose firing child is itself a composite or unknown.
+    Composite,
+    /// A caller-supplied custom trigger.
+    Custom,
+}
+
 /// A predicate deciding whether the portfolio should rebalance now.
 ///
 /// Implementations must be pure and deterministic for a given context. The
@@ -86,6 +113,17 @@ pub struct TriggerContext {
 pub trait RebalanceTrigger: fmt::Debug {
     /// Returns `true` when the portfolio should rebalance at this observation.
     fn should_rebalance(&self, ctx: &TriggerContext) -> bool;
+
+    /// Describes why this trigger fired, for the engine's audit trail.
+    ///
+    /// `ctx` is the same context passed to [`RebalanceTrigger::should_rebalance`]
+    /// and is only inspected when a trigger combines several policies. Custom
+    /// triggers that do not override this method report
+    /// [`RebalanceCause::Custom`].
+    fn cause(&self, ctx: &TriggerContext) -> RebalanceCause {
+        let _ = ctx;
+        RebalanceCause::Custom
+    }
 }
 
 /// A calendar- or interval-based rebalance schedule.
@@ -182,6 +220,10 @@ impl RebalanceTrigger for CalendarTrigger {
                 }
             }
         }
+    }
+
+    fn cause(&self, _ctx: &TriggerContext) -> RebalanceCause {
+        RebalanceCause::Calendar
     }
 }
 
@@ -346,6 +388,10 @@ impl RebalanceTrigger for DriftTrigger {
             }
         }
     }
+
+    fn cause(&self, _ctx: &TriggerContext) -> RebalanceCause {
+        RebalanceCause::Drift
+    }
 }
 
 fn validate_threshold(threshold: f64) -> Result<(), KurumiError> {
@@ -415,6 +461,18 @@ impl RebalanceTrigger for CompositeTrigger {
         match self {
             Self::Any(triggers) => triggers.iter().any(|trigger| trigger.should_rebalance(ctx)),
             Self::All(triggers) => triggers.iter().all(|trigger| trigger.should_rebalance(ctx)),
+        }
+    }
+
+    fn cause(&self, ctx: &TriggerContext) -> RebalanceCause {
+        match self {
+            Self::Any(triggers) => triggers
+                .iter()
+                .find(|trigger| trigger.should_rebalance(ctx))
+                .map_or(RebalanceCause::Composite, |trigger| trigger.cause(ctx)),
+            Self::All(triggers) => triggers
+                .first()
+                .map_or(RebalanceCause::Composite, |trigger| trigger.cause(ctx)),
         }
     }
 }
