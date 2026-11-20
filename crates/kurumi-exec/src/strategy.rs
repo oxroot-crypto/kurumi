@@ -401,8 +401,10 @@ pub trait Strategy {
 
     /// Called once after the last market event.
     ///
-    /// The default implementation emits no orders. Orders returned here are
-    /// processed against the final observation.
+    /// The default implementation emits no orders. Market orders returned here
+    /// execute against the final observation; limit and stop orders are
+    /// registered but wait for a later event, so they may remain open when the
+    /// run ends.
     ///
     /// # Errors
     ///

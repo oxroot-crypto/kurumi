@@ -559,6 +559,10 @@ const JOURNAL_QUEUE_CAPACITY: usize = 1024;
 /// [`Drop`] wait for the writer, which is appropriate at shutdown or a
 /// checkpoint rather than on the market-data hot path.
 ///
+/// If the inner sink reports an error, the writer stops writing and returns
+/// that failure from the next [`AuditJournal::flush`]; records already accepted
+/// into the queue are not rolled back.
+///
 /// # Examples
 ///
 /// ```
