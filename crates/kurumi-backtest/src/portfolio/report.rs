@@ -455,6 +455,10 @@ mod tests {
     }
 
     fn report(equities: &[i64]) -> PortfolioBacktestReport {
+        report_with_turnover(equities, 0.0)
+    }
+
+    fn report_with_turnover(equities: &[i64], total_turnover: f64) -> PortfolioBacktestReport {
         let curve = equities
             .iter()
             .enumerate()
@@ -469,7 +473,7 @@ mod tests {
             Decimal::ZERO,
             Decimal::ZERO,
             Decimal::from(*equities.first().expect("non-empty")),
-            0.0,
+            total_turnover,
             252.0,
             0.0,
         )
@@ -484,6 +488,20 @@ mod tests {
         assert_eq!(report.rebalance_count, 0);
         assert!(report.cost_drag_bps >= 0.0);
         assert!(report.annualized_turnover.is_finite());
+    }
+
+    #[test]
+    fn annualized_turnover_divides_by_return_periods() {
+        // Four equity observations produce three returns, so the one-way total
+        // of 1.5 weight units annualizes to 1.5 / 3 * 252.
+        let report = report_with_turnover(&[1_000, 1_010, 1_020, 1_030], 1.5);
+        assert!((report.annualized_turnover - 126.0).abs() < 1e-12);
+
+        let zero = report_with_turnover(&[1_000, 1_010, 1_020, 1_030], 0.0);
+        assert!(zero.annualized_turnover.abs() < 1e-12);
+
+        let one_way = report_with_turnover(&[1_000, 1_010, 1_020, 1_030], 0.5);
+        assert!((one_way.annualized_turnover - 42.0).abs() < 1e-12);
     }
 
     #[test]

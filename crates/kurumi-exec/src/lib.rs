@@ -95,7 +95,9 @@ pub mod strategy;
 mod util;
 
 pub use error::ExecError;
-pub use journal::{AuditJournal, JournalRecord, JsonlFileJournal, MemoryJournal};
+pub use journal::{
+    AuditJournal, JournalRecord, JsonlFileJournal, MemoryJournal, NonBlockingJournal,
+};
 pub use ledger::{ExecutionLedger, LedgerPosition, LedgerPositionSeed};
 pub use order::{
     BrokerOrderId, ClientOrderId, ExecId, ExecutionReport, OrderCommand, OrderRecord, OrderRequest,

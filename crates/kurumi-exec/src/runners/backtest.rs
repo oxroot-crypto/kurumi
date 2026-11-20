@@ -747,7 +747,7 @@ impl BacktestRunner {
         };
         self.ledger.apply_execution_report(&accepted)?;
         self.matching
-            .register_order(request.clone(), reference_price)?;
+            .register_order_at(request.clone(), reference_price, timestamp, true)?;
         self.journal
             .record(&JournalRecord::submit(timestamp, &request))?;
         self.journal.record(&JournalRecord::accepted(

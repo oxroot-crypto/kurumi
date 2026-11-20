@@ -179,6 +179,11 @@ struct LiveCounters {
 
 /// The asynchronous live execution driver.
 ///
+/// The journal is called synchronously from the market-data task. Use
+/// [`NonBlockingJournal`](crate::NonBlockingJournal) around a blocking sink
+/// such as [`JsonlFileJournal`](crate::JsonlFileJournal) so disk writes never
+/// stall the Tokio event loop.
+///
 /// # Examples
 ///
 /// ```
@@ -654,8 +659,12 @@ impl LiveRunner {
     ) -> Result<(), ExecError> {
         request.validate()?;
         let timestamp = event.timestamp();
-        let reference_price = event
-            .reference_price(&request.symbol, request.side)?
+        // A limit/stop order reserves against its own trigger price, matching
+        // `BacktestRunner`; market orders fall back to the event's reference
+        // price. This keeps the two runners' reservations bit-identical.
+        let reference_price = request
+            .reference_price()
+            .or(event.reference_price(&request.symbol, request.side)?)
             .or_else(|| self.ledger.last_price(&request.symbol));
         let Some(reference_price) = reference_price else {
             return self.reject_unreserved(

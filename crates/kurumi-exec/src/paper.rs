@@ -21,6 +21,13 @@
 //! - An unfilled **IOC** or **FOK** order expires immediately. A **Day** order
 //!   expires when the session date advances.
 //!
+//! A limit or stop order that a runner submits while processing an event is
+//! registered with [`PaperMatchingEngine::register_order_at`] and is not
+//! eligible against that same event: it waits for a later market observation,
+//! so the signal bar's own `high`/`low` can never fill it. A market order may
+//! still fill against the event that produced the signal (the documented
+//! close-auction convention).
+//!
 //! The engine fills the full remaining quantity when a match occurs; it does not
 //! model queue position or partial depth. Partial fills are still supported by
 //! [`OrderRecord`](crate::OrderRecord) and by custom matching implementations.
@@ -72,6 +79,14 @@ struct WorkingOrder {
     request: OrderRequest,
     activated: bool,
     remaining: Decimal,
+    /// Event timestamp at which the order was registered. `None` means the
+    /// order is immediately eligible (the legacy [`PaperMatchingEngine::register_order`]
+    /// entry point).
+    registered_at: Option<DateTime<Utc>>,
+    /// When true, the order may not match against the event at `registered_at`;
+    /// it becomes eligible on a later event. Runners set this for limit and stop
+    /// orders so a signal bar's own `high`/`low` cannot fill them.
+    deferred: bool,
 }
 
 /// The synchronous simulated broker.
@@ -133,7 +148,13 @@ impl PaperMatchingEngine {
         Self::new(Box::new(NoFee), Box::new(NoSlippage))
     }
 
-    /// Registers a newly accepted order.
+    /// Registers a newly accepted order that is immediately eligible, including
+    /// against the next market event at the same timestamp.
+    ///
+    /// Runners that process a signal bar should use
+    /// [`PaperMatchingEngine::register_order_at`] instead, so a new limit or
+    /// stop order waits for a later observation and cannot be filled by the
+    /// signal bar's own range.
     ///
     /// # Errors
     ///
@@ -144,6 +165,44 @@ impl PaperMatchingEngine {
         &mut self,
         request: OrderRequest,
         reference_price: Decimal,
+    ) -> Result<(), ExecError> {
+        self.insert_order(request, reference_price, None, false)
+    }
+
+    /// Registers a newly accepted order at the event that produced it.
+    ///
+    /// When `defer_non_market` is true, a limit, stop, or stop-limit order is
+    /// not matched against an event whose timestamp is less than or equal to
+    /// `registered_at`; it waits for a later event. A market order is never
+    /// deferred, because filling it at the signal bar's close is the documented
+    /// close-auction convention.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecError::DuplicateClientOrderId`] when the identifier is
+    /// already working and [`ExecError::InvalidOrder`] when the request is
+    /// malformed.
+    pub fn register_order_at(
+        &mut self,
+        request: OrderRequest,
+        reference_price: Decimal,
+        registered_at: DateTime<Utc>,
+        defer_non_market: bool,
+    ) -> Result<(), ExecError> {
+        self.insert_order(
+            request,
+            reference_price,
+            Some(registered_at),
+            defer_non_market,
+        )
+    }
+
+    fn insert_order(
+        &mut self,
+        request: OrderRequest,
+        reference_price: Decimal,
+        registered_at: Option<DateTime<Utc>>,
+        defer_non_market: bool,
     ) -> Result<(), ExecError> {
         request.validate()?;
         if reference_price <= Decimal::ZERO {
@@ -156,6 +215,7 @@ impl PaperMatchingEngine {
                 client_order_id: request.client_order_id.to_string(),
             });
         }
+        let deferred = defer_non_market && !matches!(request.order_type, OrderType::Market);
         let remaining = request.quantity;
         self.working.insert(
             request.client_order_id.clone(),
@@ -163,6 +223,8 @@ impl PaperMatchingEngine {
                 request,
                 activated: false,
                 remaining,
+                registered_at,
+                deferred,
             },
         );
         Ok(())
@@ -254,6 +316,16 @@ impl PaperMatchingEngine {
             let Some(working) = self.working.get(&client_order_id) else {
                 continue;
             };
+            // A limit/stop order submitted while processing this event must not
+            // be filled by the signal bar's own range. It becomes eligible on a
+            // later observation. Market orders are never deferred.
+            if working.deferred
+                && working
+                    .registered_at
+                    .is_some_and(|registered_at| timestamp <= registered_at)
+            {
+                continue;
+            }
             let request = working.request.clone();
             let view = event_view(event, &request.symbol).or_else(|| match event {
                 ExecMarketEvent::Snapshot(_) => self
@@ -643,11 +715,80 @@ mod tests {
         )
     }
 
-    fn bar(open: f64, high: f64, low: f64, close: f64) -> ExecMarketEvent {
+    fn bar_at(ts: DateTime<Utc>, open: f64, high: f64, low: f64, close: f64) -> ExecMarketEvent {
         ExecMarketEvent::Bar {
             symbol: "AAA".to_owned(),
             bar: OhlcvBar::new(0, open, high, low, close, 1_000.0, 1_000.0 * close).expect("bar"),
-            ts: timestamp(0),
+            ts,
+        }
+    }
+
+    fn bar(open: f64, high: f64, low: f64, close: f64) -> ExecMarketEvent {
+        bar_at(timestamp(0), open, high, low, close)
+    }
+
+    #[test]
+    fn deferred_limit_waits_for_a_later_event() {
+        let mut engine = PaperMatchingEngine::frictionless();
+        engine
+            .register_order_at(
+                request(
+                    "b-deferred",
+                    OrderSide::Buy,
+                    OrderType::Limit {
+                        price: Decimal::from(100),
+                    },
+                    TimeInForce::Gtc,
+                ),
+                Decimal::from(100),
+                timestamp(0),
+                true,
+            )
+            .expect("register");
+        let same_event = engine
+            .on_market_event(&bar_at(timestamp(0), 91.0, 96.0, 90.0, 92.0))
+            .expect("signal bar");
+        assert!(
+            same_event.is_empty(),
+            "a deferred limit must not fill on the signal bar"
+        );
+        assert!(engine.is_working(&ClientOrderId::new("b-deferred")));
+
+        let next_event = engine
+            .on_market_event(&bar_at(timestamp(1), 100.0, 101.0, 99.0, 100.0))
+            .expect("next bar");
+        match next_event.first() {
+            Some(ExecutionReport::Fill {
+                fill_price,
+                fill_qty,
+                ..
+            }) => {
+                assert_eq!(*fill_price, Decimal::from(100));
+                assert_eq!(*fill_qty, Decimal::from(10));
+            }
+            other => panic!("unexpected report: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deferred_market_order_still_fills_on_the_signal_event() {
+        let mut engine = PaperMatchingEngine::frictionless();
+        engine
+            .register_order_at(
+                request("m-now", OrderSide::Buy, OrderType::Market, TimeInForce::Day),
+                Decimal::from(100),
+                timestamp(0),
+                true,
+            )
+            .expect("register");
+        let reports = engine
+            .on_market_event(&bar_at(timestamp(0), 91.0, 96.0, 90.0, 92.0))
+            .expect("signal bar");
+        match reports.first() {
+            Some(ExecutionReport::Fill { fill_price, .. }) => {
+                assert_eq!(*fill_price, Decimal::from(92));
+            }
+            other => panic!("unexpected report: {other:?}"),
         }
     }
 

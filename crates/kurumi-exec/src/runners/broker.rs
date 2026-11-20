@@ -310,20 +310,23 @@ impl ExecutionBroker for PaperBroker {
         Box::pin(async move {
             let timestamp = {
                 let mut state = self.state.lock().await;
-                let reference_price = state
-                    .engine
-                    .last_price(&request.symbol)
-                    .or_else(|| request.reference_price())
+                let reference_price = request
+                    .reference_price()
+                    .or_else(|| state.engine.last_price(&request.symbol))
                     .ok_or_else(|| ExecError::BrokerError {
                         message: format!(
                             "paper broker has no reference price for `{}`",
                             request.symbol
                         ),
                     })?;
-                state
-                    .engine
-                    .register_order(request.clone(), reference_price)?;
-                state.clock
+                let timestamp = state.clock;
+                state.engine.register_order_at(
+                    request.clone(),
+                    reference_price,
+                    timestamp,
+                    true,
+                )?;
+                timestamp
             };
             self.report_tx
                 .send(ExecutionReport::Accepted {

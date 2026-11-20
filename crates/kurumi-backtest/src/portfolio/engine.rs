@@ -1320,6 +1320,35 @@ mod tests {
     }
 
     #[test]
+    fn initial_rebalance_turnover_is_one_way() {
+        let feed = feed(&[
+            ("AAA", &[100.0, 101.0, 102.0, 103.0]),
+            ("BBB", &[50.0, 50.0, 51.0, 52.0]),
+        ]);
+        let mut config =
+            PortfolioBacktestConfig::new(Decimal::from(100_000)).expect("valid config");
+        config.cash_buffer_ratio = Decimal::ZERO;
+        let mut engine =
+            PortfolioBacktestEngine::new(config, Box::new(NoFee), Box::new(NoSlippage))
+                .expect("valid engine");
+        let mut allocator = allocator();
+        let report = engine
+            .run(feed, &CalendarTrigger::Monthly, &mut allocator)
+            .expect("backtest");
+        let event = report.rebalance_events.first().expect("initial rebalance");
+        assert_eq!(event.cause, RebalanceCause::Initial);
+        // Full entry into 60/40 is 0.5 * (0.6 + 0.4) one-way, not the
+        // double-sided 1.0 that a buy+sell sum would produce.
+        assert!(
+            (event.turnover - 0.5).abs() < 1e-12,
+            "one-way initial turnover must be 0.5, got {}",
+            event.turnover
+        );
+        // Four equity observations produce three returns.
+        assert!((report.annualized_turnover - 0.5 / 3.0 * 252.0).abs() < 1e-12);
+    }
+
+    #[test]
     fn next_bar_open_queues_and_fills_on_the_next_observation() {
         let feed = feed(&[
             ("AAA", &[100.0, 110.0, 120.0, 130.0]),

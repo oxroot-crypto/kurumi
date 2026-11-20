@@ -26,6 +26,8 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use std::thread::{self, JoinHandle};
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -545,6 +547,144 @@ impl AuditJournal for JsonlFileJournal {
     }
 }
 
+/// Capacity of the bounded queue between [`NonBlockingJournal`] and its writer.
+const JOURNAL_QUEUE_CAPACITY: usize = 1024;
+
+/// A non-blocking [`AuditJournal`] adapter for the asynchronous live runner.
+///
+/// The wrapped sink is moved to a dedicated writer thread. [`AuditJournal::record`]
+/// only enqueues a cloned record with `try_send`, so a slow disk flush cannot
+/// stall a Tokio worker; if the bounded queue is full the call returns
+/// [`ExecError::JournalError`] instead of blocking. [`AuditJournal::flush`] and
+/// [`Drop`] wait for the writer, which is appropriate at shutdown or a
+/// checkpoint rather than on the market-data hot path.
+///
+/// # Examples
+///
+/// ```
+/// use kurumi_exec::{AuditJournal, JournalRecord, JsonlFileJournal, NonBlockingJournal};
+///
+/// # fn main() -> Result<(), kurumi_exec::ExecError> {
+/// let inner = JsonlFileJournal::create(std::env::temp_dir().join("kurumi-nonblocking.jsonl"))?;
+/// let mut journal = NonBlockingJournal::new(Box::new(inner))?;
+/// journal.record(&JournalRecord::Canceled {
+///     ts_millis: 0,
+///     client_order_id: "o-1".to_owned(),
+/// })?;
+/// journal.flush()?;
+/// # Ok(())
+/// # }
+/// ```
+pub struct NonBlockingJournal {
+    sender: SyncSender<JournalCommand>,
+    writer: Option<JoinHandle<Result<(), ExecError>>>,
+}
+
+enum JournalCommand {
+    // Boxing keeps the `Flush`/`Shutdown` variants small; records are large.
+    Record(Box<JournalRecord>),
+    Flush(mpsc::Sender<Result<(), ExecError>>),
+    Shutdown(mpsc::Sender<Result<(), ExecError>>),
+}
+
+impl NonBlockingJournal {
+    /// Spawns a writer thread around `inner`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecError::JournalError`] when the writer thread cannot be
+    /// spawned.
+    pub fn new(inner: Box<dyn AuditJournal>) -> Result<Self, ExecError> {
+        let (sender, receiver) = mpsc::sync_channel(JOURNAL_QUEUE_CAPACITY);
+        let writer = thread::Builder::new()
+            .name("kurumi-exec-journal".to_owned())
+            .spawn(move || journal_writer(inner, receiver))
+            .map_err(|error| ExecError::JournalError {
+                message: format!("failed to spawn journal writer: {error}"),
+            })?;
+        Ok(Self {
+            sender,
+            writer: Some(writer),
+        })
+    }
+}
+
+impl AuditJournal for NonBlockingJournal {
+    fn record(&mut self, record: &JournalRecord) -> Result<(), ExecError> {
+        self.sender
+            .try_send(JournalCommand::Record(Box::new(record.clone())))
+            .map_err(|error| match error {
+                TrySendError::Full(_) => ExecError::JournalError {
+                    message: "journal queue is full; the writer cannot keep up".to_owned(),
+                },
+                TrySendError::Disconnected(_) => ExecError::JournalError {
+                    message: "journal writer has stopped".to_owned(),
+                },
+            })
+    }
+
+    fn flush(&mut self) -> Result<(), ExecError> {
+        let (ack_tx, ack_rx) = mpsc::channel();
+        self.sender
+            .send(JournalCommand::Flush(ack_tx))
+            .map_err(|_| ExecError::JournalError {
+                message: "journal writer has stopped".to_owned(),
+            })?;
+        ack_rx.recv().map_err(|_| ExecError::JournalError {
+            message: "journal writer dropped the flush acknowledgement".to_owned(),
+        })?
+    }
+}
+
+impl Drop for NonBlockingJournal {
+    fn drop(&mut self) {
+        let (ack_tx, ack_rx) = mpsc::channel();
+        if self.sender.send(JournalCommand::Shutdown(ack_tx)).is_ok() {
+            let _ = ack_rx.recv();
+        }
+        if let Some(writer) = self.writer.take() {
+            let _ = writer.join();
+        }
+    }
+}
+
+fn journal_writer(
+    mut inner: Box<dyn AuditJournal>,
+    receiver: Receiver<JournalCommand>,
+) -> Result<(), ExecError> {
+    let mut failure: Option<String> = None;
+    while let Ok(command) = receiver.recv() {
+        match command {
+            JournalCommand::Record(record) => {
+                if failure.is_none() {
+                    if let Err(error) = inner.record(record.as_ref()) {
+                        failure = Some(error.to_string());
+                    }
+                }
+            }
+            JournalCommand::Flush(ack) => {
+                let _ = ack.send(finish_journal(&mut inner, &mut failure));
+            }
+            JournalCommand::Shutdown(ack) => {
+                let result = finish_journal(&mut inner, &mut failure);
+                let _ = ack.send(result);
+                return Ok(());
+            }
+        }
+    }
+    finish_journal(&mut inner, &mut failure)
+}
+
+fn finish_journal(
+    inner: &mut Box<dyn AuditJournal>,
+    failure: &mut Option<String>,
+) -> Result<(), ExecError> {
+    if let Some(message) = failure.clone() {
+        return Err(ExecError::JournalError { message });
+    }
+    inner.flush()
+}
+
 /// Escapes a string as a JSON string literal.
 fn json_string(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len() + 2);
@@ -639,6 +779,35 @@ mod tests {
             let value: serde_json::Value = serde_json::from_str(line).expect("valid json");
             assert!(value.get("kind").is_some());
         }
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn nonblocking_journal_writes_and_flushes_on_a_writer_thread() {
+        let path = std::env::temp_dir().join(format!(
+            "kurumi-exec-journal-nonblocking-{}-{}.jsonl",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let inner = JsonlFileJournal::create(&path).expect("create");
+        let mut journal = NonBlockingJournal::new(Box::new(inner)).expect("adapter");
+        let ts = DateTime::<Utc>::from_timestamp_millis(0).expect("timestamp");
+        journal
+            .record(&JournalRecord::canceled(ts, &ClientOrderId::new("o-1")))
+            .expect("record");
+        journal
+            .record(&JournalRecord::equity(
+                ts,
+                Decimal::from(10),
+                Decimal::ZERO,
+                Decimal::from(10),
+            ))
+            .expect("record");
+        journal.flush().expect("flush");
+        drop(journal);
+
+        let contents = std::fs::read_to_string(&path).expect("read");
+        assert_eq!(contents.lines().count(), 2);
         let _ = std::fs::remove_file(path);
     }
 }

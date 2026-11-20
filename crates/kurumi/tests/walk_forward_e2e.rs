@@ -387,3 +387,43 @@ fn scenario_c_no_lookahead_keeps_every_in_sample_winner() -> Result<(), KurumiEr
     );
     Ok(())
 }
+
+#[test]
+fn scenario_d_embargo_boundary_tamper_keeps_the_last_in_sample_result() -> Result<(), KurumiError> {
+    let baseline_data = aligned_data(|_| 1.0)?;
+    let config = walk_forward_config(WalkForwardMode::Rolling);
+    let folds = generate_folds(TRADING_DAYS, &config)?;
+    let last = folds.last().copied().expect("at least one fold");
+
+    // Tamper from the last fold's IS end, so the embargo bars
+    // [is_end, oos_start) are also tampered. IS must never observe them.
+    let tampered_data = aligned_data(|day| if day >= last.is_end { 5.0 } else { 1.0 })?;
+
+    let baseline = run_walk_forward(&baseline_data, WalkForwardMode::Rolling)?;
+    let tampered = run_walk_forward(&tampered_data, WalkForwardMode::Rolling)?;
+
+    let baseline_last = baseline.folds.last().expect("last fold");
+    let tampered_last = tampered.folds.last().expect("last fold");
+    assert_eq!(baseline_last.window, tampered_last.window);
+    assert_eq!(
+        baseline_last.best_params, tampered_last.best_params,
+        "tampering the embargo bars must not change the last fold's IS winner"
+    );
+    assert_eq!(
+        baseline_last.is_result.best_index, tampered_last.is_result.best_index,
+        "tampering the embargo bars must not change the last fold's IS ranking"
+    );
+    assert_eq!(
+        baseline_last
+            .is_best_summary
+            .map(|summary| summary.annualized_return),
+        tampered_last
+            .is_best_summary
+            .map(|summary| summary.annualized_return)
+    );
+    assert_ne!(
+        baseline_last.oos_report.final_equity, tampered_last.oos_report.final_equity,
+        "the tampered embargo/OOS data must still reach the OOS evaluation"
+    );
+    Ok(())
+}

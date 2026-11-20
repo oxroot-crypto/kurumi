@@ -29,6 +29,10 @@ tracing = { workspace = true, optional = true }
 
 [features]
 default = []
+# Forwards the `kurumi-backtest` Rayon switch. It is additive and off by
+# default, so a default `kurumi-exec` build stays sequential; the `kurumi`
+# facade enables it through its own `parallel` feature.
+parallel = ["kurumi-backtest/parallel"]
 # The asynchronous live execution layer: market data, broker adapters, and the
 # LiveRunner. Off by default so a normal build stays Sans-I/O and runtime-free.
 live = [
