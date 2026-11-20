@@ -111,6 +111,39 @@ impl LedgerPosition {
     }
 }
 
+/// One starting position used by [`ExecutionLedger::reconcile_starting_state`].
+///
+/// # Examples
+///
+/// ```
+/// use kurumi_exec::LedgerPositionSeed;
+/// use rust_decimal::Decimal;
+///
+/// let seed = LedgerPositionSeed::new("AAA", Decimal::from(10), Decimal::from(100));
+/// assert_eq!(seed.symbol, "AAA");
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct LedgerPositionSeed {
+    /// Instrument symbol.
+    pub symbol: String,
+    /// Signed starting quantity; negative is short.
+    pub quantity: Decimal,
+    /// Absolute average entry price, or zero for a flat seed.
+    pub avg_cost: Decimal,
+}
+
+impl LedgerPositionSeed {
+    /// Creates a starting-position seed.
+    #[must_use]
+    pub fn new(symbol: impl Into<String>, quantity: Decimal, avg_cost: Decimal) -> Self {
+        Self {
+            symbol: symbol.into(),
+            quantity,
+            avg_cost,
+        }
+    }
+}
+
 /// A reservation made by an open order.
 #[derive(Debug, Clone, PartialEq)]
 struct Reservation {
@@ -510,6 +543,99 @@ impl ExecutionLedger {
             weights.insert(symbol.clone(), weight);
         }
         Ok(weights)
+    }
+
+    /// Replaces the ledger with a broker account snapshot before a live run.
+    ///
+    /// This is the startup reconciliation step: open orders, reservations, and
+    /// fee counters are cleared, then the broker's cash and positions become the
+    /// new starting state. Every non-flat seed must carry a strictly positive
+    /// average cost so equity can be valued before the first market event.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecError::InvalidOrder`] for negative cash, a non-positive
+    /// day-start equity, an empty/duplicate symbol, or a non-flat seed without a
+    /// positive average cost.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kurumi_exec::{ExecutionLedger, LedgerPositionSeed};
+    /// use rust_decimal::Decimal;
+    ///
+    /// # fn main() -> Result<(), kurumi_exec::ExecError> {
+    /// let mut ledger = ExecutionLedger::new(Decimal::from(1_000))?;
+    /// ledger.reconcile_starting_state(
+    ///     Decimal::from(900),
+    ///     Decimal::from(1_000),
+    ///     vec![LedgerPositionSeed::new("AAA", Decimal::from(1), Decimal::from(100))],
+    /// )?;
+    /// assert_eq!(ledger.position_qty("AAA"), Decimal::from(1));
+    /// assert_eq!(ledger.equity()?, Decimal::from(1_000));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn reconcile_starting_state(
+        &mut self,
+        cash: Decimal,
+        day_start_equity: Decimal,
+        positions: Vec<LedgerPositionSeed>,
+    ) -> Result<(), ExecError> {
+        if cash < Decimal::ZERO {
+            return Err(ExecError::invalid_order(
+                "reconciled cash must be non-negative",
+            ));
+        }
+        if day_start_equity <= Decimal::ZERO {
+            return Err(ExecError::invalid_order(
+                "reconciled day-start equity must be strictly positive",
+            ));
+        }
+        let mut next_positions = BTreeMap::new();
+        for seed in positions {
+            if seed.symbol.trim().is_empty() {
+                return Err(ExecError::invalid_order(
+                    "reconciled position symbol must not be empty",
+                ));
+            }
+            if next_positions.contains_key(&seed.symbol) {
+                return Err(ExecError::invalid_order(format!(
+                    "duplicate reconciled position `{}`",
+                    seed.symbol
+                )));
+            }
+            if !seed.quantity.is_zero() && seed.avg_cost <= Decimal::ZERO {
+                return Err(ExecError::invalid_order(format!(
+                    "reconciled position `{}` must have a positive average cost",
+                    seed.symbol
+                )));
+            }
+            next_positions.insert(
+                seed.symbol,
+                LedgerPosition {
+                    quantity: seed.quantity,
+                    reserved_sell_qty: Decimal::ZERO,
+                    avg_cost: if seed.quantity.is_zero() {
+                        Decimal::ZERO
+                    } else {
+                        seed.avg_cost
+                    },
+                    realized_pnl: Decimal::ZERO,
+                },
+            );
+        }
+        self.initial_cash = cash;
+        self.cash = cash;
+        self.reserved_cash = Decimal::ZERO;
+        self.positions = next_positions;
+        self.last_prices.clear();
+        self.orders.clear();
+        self.reservations.clear();
+        self.total_fees = Decimal::ZERO;
+        self.total_slippage = Decimal::ZERO;
+        self.day_start_equity = day_start_equity;
+        Ok(())
     }
 
     /// Reserves cash for a buy order or quantity for a sell order.

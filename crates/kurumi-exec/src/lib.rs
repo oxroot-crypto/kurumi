@@ -1,4 +1,4 @@
-//! Sans-I/O execution kernel.
+//! Sans-I/O execution kernel with an optional asynchronous live layer.
 //!
 //! `kurumi-exec` is the synchronous, deterministic execution layer above
 //! `kurumi-backtest`:
@@ -18,7 +18,10 @@
 //!   using the existing fee and slippage models;
 //! - [`journal`] provides the append-only [`AuditJournal`], with in-memory and
 //!   JSONL sinks;
-//! - [`runners`] provides the synchronous [`BacktestRunner`].
+//! - [`runners`] provides the synchronous [`BacktestRunner`]. With the
+//!   additive `live` feature, [`runners::broker`], [`runners::broker_alpaca`],
+//!   and [`runners::live`] add the async broker abstraction, `PaperBroker`,
+//!   Alpaca REST adapter, and `LiveRunner`, re-exported under [`live`].
 //!
 //! # Invariants
 //!
@@ -28,9 +31,13 @@
 //! and client order identifiers come from
 //! [`StrategyContext::next_order_id`]. The same strategy and matching engine can
 //! therefore be replayed through any synchronous event source with identical
-//! fills, fees, and final `Decimal` equity. The `live` Cargo feature is reserved
-//! for a future asynchronous broker adapter; it is empty in this phase, so the
-//! default build contains no runtime, network, or blocking I/O code.
+//! fills, fees, and final `Decimal` equity.
+//!
+//! The additive `live` feature is off by default. It adds the `kurumi-feed`
+//! market-data bridge, Tokio/`reqwest` broker adapters, and `LiveRunner`, which
+//! drives exactly the same synchronous strategy, risk, ledger, and paper
+//! matching types as the backtest. The default `kurumi-exec` build contains no
+//! runtime, network, or blocking I/O code.
 //!
 //! # Examples
 //!
@@ -89,7 +96,7 @@ mod util;
 
 pub use error::ExecError;
 pub use journal::{AuditJournal, JournalRecord, JsonlFileJournal, MemoryJournal};
-pub use ledger::{ExecutionLedger, LedgerPosition};
+pub use ledger::{ExecutionLedger, LedgerPosition, LedgerPositionSeed};
 pub use order::{
     BrokerOrderId, ClientOrderId, ExecId, ExecutionReport, OrderCommand, OrderRecord, OrderRequest,
     OrderSide, OrderStatus, OrderType, TimeInForce,
@@ -105,6 +112,25 @@ pub use runners::{
 pub use strategy::{
     ExecMarketEvent, PortfolioRebalanceStrategy, RebalanceStrategyConfig, Strategy, StrategyContext,
 };
+
+/// Asynchronous live execution types, available with the `live` feature.
+///
+/// This namespace re-exports the broker abstraction, the local paper broker,
+/// the Alpaca REST adapter, and the `LiveRunner` event loop. It is absent from
+/// the default Sans-I/O build.
+#[cfg(feature = "live")]
+pub mod live {
+    pub use crate::runners::broker::{
+        BrokerAccountSnapshot, BrokerPosition, DEFAULT_REPORT_CHANNEL_CAPACITY, ExecutionBroker,
+        PaperBroker,
+    };
+    pub use crate::runners::broker_alpaca::{
+        ALPACA_LIVE_URL, ALPACA_PAPER_URL, AlpacaTradingBroker,
+    };
+    pub use crate::runners::live::{
+        LiveConfig, LiveRunner, LiveSessionSummary, bar_event_to_exec, feed_event_to_exec,
+    };
+}
 
 /// The `chrono` crate, re-exported so callers can build event timestamps without
 /// adding a separate dependency.

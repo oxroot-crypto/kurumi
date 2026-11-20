@@ -48,7 +48,7 @@ use crate::order::{ClientOrderId, ExecutionReport, OrderRequest};
 ///
 /// let ts = DateTime::<Utc>::from_timestamp_millis(1).expect("epoch");
 /// let record = JournalRecord::equity(ts, Decimal::ONE, Decimal::ZERO, Decimal::ONE);
-/// let json = serde_json::to_string(&record).expect("serializable");
+/// let json = record.to_json_line();
 /// assert!(json.contains("equity_snapshot"));
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -252,9 +252,118 @@ impl JournalRecord {
             equity: equity.to_string(),
         }
     }
+
+    /// Serializes the record as one compact JSON line without a trailing
+    /// newline.
+    ///
+    /// The writer is hand-rolled so the default Sans-I/O build does not depend
+    /// on `serde_json`; the output is the same object shape produced by the
+    /// `Serialize` implementation.
+    #[must_use]
+    pub fn to_json_line(&self) -> String {
+        match self {
+            Self::Submit {
+                ts_millis,
+                client_order_id,
+                symbol,
+                side,
+                order_type,
+                limit_price,
+                stop_price,
+                quantity,
+                tif,
+                reduce_only,
+                tag,
+            } => format!(
+                concat!(
+                    r#"{{"kind":"submit","ts_millis":{},"client_order_id":{},"symbol":{},"side":{},"order_type":{},"#,
+                    r#""limit_price":{},"stop_price":{},"quantity":{},"tif":{},"reduce_only":{},"tag":{}}}"#
+                ),
+                ts_millis,
+                json_string(client_order_id),
+                json_string(symbol),
+                json_string(side),
+                json_string(order_type),
+                json_optional(limit_price.as_deref()),
+                json_optional(stop_price.as_deref()),
+                json_string(quantity),
+                json_string(tif),
+                reduce_only,
+                json_optional(tag.as_deref()),
+            ),
+            Self::Accepted {
+                ts_millis,
+                client_order_id,
+            } => format!(
+                r#"{{"kind":"accepted","ts_millis":{},"client_order_id":{}}}"#,
+                ts_millis,
+                json_string(client_order_id),
+            ),
+            Self::Canceled {
+                ts_millis,
+                client_order_id,
+            } => format!(
+                r#"{{"kind":"canceled","ts_millis":{},"client_order_id":{}}}"#,
+                ts_millis,
+                json_string(client_order_id),
+            ),
+            Self::Fill {
+                ts_millis,
+                client_order_id,
+                exec_id,
+                symbol,
+                side,
+                fill_price,
+                fill_qty,
+                fee,
+                slippage,
+            } => format!(
+                concat!(
+                    r#"{{"kind":"fill","ts_millis":{},"client_order_id":{},"exec_id":{},"symbol":{},"#,
+                    r#""side":{},"fill_price":{},"fill_qty":{},"fee":{},"slippage":{}}}"#
+                ),
+                ts_millis,
+                json_string(client_order_id),
+                json_string(exec_id),
+                json_string(symbol),
+                json_string(side),
+                json_string(fill_price),
+                json_string(fill_qty),
+                json_string(fee),
+                json_string(slippage),
+            ),
+            Self::RiskRejected {
+                ts_millis,
+                client_order_id,
+                rule,
+                reason,
+            } => format!(
+                r#"{{"kind":"risk_rejected","ts_millis":{},"client_order_id":{},"rule":{},"reason":{}}}"#,
+                ts_millis,
+                json_string(client_order_id),
+                json_string(rule),
+                json_string(reason),
+            ),
+            Self::EquitySnapshot {
+                ts_millis,
+                cash,
+                reserved_cash,
+                equity,
+            } => format!(
+                r#"{{"kind":"equity_snapshot","ts_millis":{},"cash":{},"reserved_cash":{},"equity":{}}}"#,
+                ts_millis,
+                json_string(cash),
+                json_string(reserved_cash),
+                json_string(equity),
+            ),
+        }
+    }
 }
 
 /// An append-only audit sink.
+///
+/// Implementations must be `Send` so the live runner can move its journal between
+/// Tokio workers.
 ///
 /// # Examples
 ///
@@ -274,7 +383,7 @@ impl JournalRecord {
 ///     client_order_id: "o-1".to_owned(),
 /// }).is_ok());
 /// ```
-pub trait AuditJournal {
+pub trait AuditJournal: Send {
     /// Appends one record.
     ///
     /// # Errors
@@ -418,9 +527,7 @@ impl JsonlFileJournal {
 
 impl AuditJournal for JsonlFileJournal {
     fn record(&mut self, record: &JournalRecord) -> Result<(), ExecError> {
-        let line = serde_json::to_string(record).map_err(|error| ExecError::JournalError {
-            message: error.to_string(),
-        })?;
+        let line = record.to_json_line();
         self.writer
             .write_all(line.as_bytes())
             .and_then(|()| self.writer.write_all(b"\n"))
@@ -436,6 +543,31 @@ impl AuditJournal for JsonlFileJournal {
                 message: error.to_string(),
             })
     }
+}
+
+/// Escapes a string as a JSON string literal.
+fn json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() + 2);
+    escaped.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            control if (control as u32) < 0x20 => {
+                escaped.push_str(&format!("\\u{:04x}", control as u32));
+            }
+            other => escaped.push(other),
+        }
+    }
+    escaped.push('"');
+    escaped
+}
+
+fn json_optional(value: Option<&str>) -> String {
+    value.map_or_else(|| "null".to_owned(), json_string)
 }
 
 #[cfg(test)]
@@ -462,6 +594,19 @@ mod tests {
             journal.records().first(),
             Some(JournalRecord::Canceled { .. })
         ));
+    }
+
+    #[test]
+    fn json_line_escapes_strings() {
+        let record = JournalRecord::RiskRejected {
+            ts_millis: 1,
+            client_order_id: "o-1".to_owned(),
+            rule: "Rule".to_owned(),
+            reason: "quote \" backslash \\ newline \n".to_owned(),
+        };
+        let line = record.to_json_line();
+        let parsed: serde_json::Value = serde_json::from_str(&line).expect("valid JSON");
+        assert_eq!(parsed["reason"], "quote \" backslash \\ newline \n");
     }
 
     #[test]

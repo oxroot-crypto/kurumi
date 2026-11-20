@@ -35,6 +35,7 @@ risk = ["ta", "pricing", "dep:kurumi-risk"]
 portfolio = ["risk", "dep:kurumi-portfolio"]
 backtest = ["portfolio", "dep:kurumi-backtest"]
 exec = ["backtest", "dep:kurumi-exec"]
+exec-live = ["exec", "feed", "kurumi-exec/live"]
 # Real-time market data. Included in `full` per the Nasdaq integration request;
 # a `--no-default-features` build omits it and never links Tokio.
 feed = ["dep:kurumi-feed", "ta"]
@@ -50,6 +51,7 @@ full = [
     "portfolio",
     "backtest",
     "exec",
+    "exec-live",
     "feed",
 ]
 

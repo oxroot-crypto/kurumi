@@ -20,7 +20,7 @@ Kurumi is a single Cargo workspace. Every library lives under `crates/`:
 | `kurumi-risk` | Risk and performance analytics: VaR, CVaR, Greeks aggregation, Sharpe ratio, drawdowns, and benchmark-relative metrics. |
 | `kurumi-portfolio` | Multi-asset panel alignment, return matrices, portfolio performance and risk decomposition, rolling beta/correlation panels. |
 | `kurumi-backtest` | Strategy backtesting: order-book matching simulation, slippage and fee models, account/position tracking, and multi-asset portfolio backtesting under `portfolio`. |
-| `kurumi-exec` | Synchronous execution kernel: order state machine, reservation ledger, pre-trade risk gate, paper matching, audit journal, and backtest runner. Sans-I/O: no runtime or network dependency. |
+| `kurumi-exec` | Execution kernel: order state machine, reservation ledger, pre-trade risk gate, paper matching, audit journal, backtest runner, and an optional `live` async layer with paper/Alpaca brokers. Sans-I/O by default: no runtime or network dependency. |
 | `kurumi-feed` | Asynchronous real-time market data: provider connectors, a resilience runtime, a multi-provider fan-out hub, and streaming OHLCV bar aggregation. Depends only on `kurumi-core` and `kurumi-ta`. |
 | `kurumi` | Top-level facade: re-exports the synchronous member crates behind Cargo features and hosts the Python/WASM bindings. |
 
@@ -32,6 +32,8 @@ Dependencies flow in one direction only:
 kurumi-core  <  kurumi-math  <  kurumi-ta / kurumi-pricing  <  kurumi-risk  <  kurumi-portfolio  <  kurumi-backtest  <  kurumi-exec  <  kurumi
 
 kurumi-core  <  kurumi-ta  <  kurumi-feed          (isolated asynchronous branch)
+
+kurumi-exec --(feature `live`)--> kurumi-feed     (opt-in live branch)
 ```
 
 A synchronous crate may depend only on crates that appear earlier in the main
@@ -43,11 +45,14 @@ dependency never points the other way. `kurumi-exec` sits directly above
 abstractions but never introduces an edge downward or an asynchronous
 dependency. `kurumi-core` has no workspace dependencies. `kurumi-feed` is an
 isolated asynchronous branch: it may depend on
-`kurumi-core` and `kurumi-ta`, but no synchronous crate may depend on it. The
-`kurumi` facade depends on every synchronous member crate, and no member may
-depend on the facade. `kurumi-feed` is not part of the default facade feature
-set; expose it, if ever, only behind an additive opt-in feature so a default
-`kurumi` build never pulls an async runtime.
+`kurumi-core` and `kurumi-ta`, but no synchronous crate may depend on it.
+`kurumi-exec` is Sans-I/O by default; only its additive `live` feature may
+depend on `kurumi-feed` and async runtime crates, and that feature is never part
+of a default build. The `kurumi` facade depends on every synchronous member
+crate, and no member may depend on the facade. `kurumi-feed` and the
+`kurumi-exec` live layer are not part of the default facade feature set; expose
+them only behind additive opt-in features so a default `kurumi` build never
+pulls an async runtime.
 
 Crate boundaries are part of the public architecture: do not merge crates,
 introduce a new crate, or add an edge that reverses the layering without an
@@ -84,7 +89,7 @@ explicit architectural decision recorded in the PR.
   comment covering every invariant, and review justification.
 - **Facade features**: `kurumi` exposes each synchronous member behind an
   additive feature (`core`, `math`, `ta`, `pricing`, `risk`, `portfolio`,
-  `backtest`, `exec`). Features are additive: enabling one must not break another, and
+  `backtest`, `exec`, `exec-live`). Features are additive: enabling one must not break another, and
   lower-layer features are implied by higher-layer ones. Default features enable
   the whole synchronous library. `kurumi-feed` stays outside the default feature
   set so a default build never pulls an async runtime. Keep the feature graph in
@@ -171,16 +176,18 @@ statistics in `kurumi-math` and the benchmark-relative metrics in `kurumi-risk`.
 
 ## 7. Real-Time Market Data (`kurumi-feed`) Invariants
 
-`kurumi-feed` is the only asynchronous crate and the only place where a network
-runtime is allowed. It is an isolated branch of the dependency graph: it may
+`kurumi-feed` is the asynchronous market-data crate. The only other asynchronous
+code is the `kurumi-exec` live layer, which is gated behind its additive `live`
+feature. `kurumi-feed` is an isolated branch of the dependency graph: it may
 depend on `kurumi-core` and `kurumi-ta`, and no synchronous crate may depend on
 it.
 
 - **Strict Async Isolation**: `tokio`, `tokio-tungstenite`, and `reqwest` MUST
-  ONLY be added to `kurumi-feed`. Never introduce async runtime dependencies
+  ONLY be added to `kurumi-feed` and, as optional dependencies gated by the
+  `live` feature, to `kurumi-exec`. Never introduce async runtime dependencies
   into `kurumi-core`, `kurumi-math`, `kurumi-ta`, `kurumi-pricing`,
-  `kurumi-risk`, `kurumi-portfolio`, `kurumi-backtest`, or `kurumi-exec`
-  (including their dev-dependencies). A default `kurumi` facade build MUST NOT pull a runtime.
+  `kurumi-risk`, `kurumi-portfolio`, or `kurumi-backtest` (including their
+  dev-dependencies). A default `kurumi` or `kurumi-exec` build MUST NOT pull a runtime.
 - **Pure Rust TLS**: Configure `tokio-tungstenite` and `reqwest` with `rustls`
   (disabling default OpenSSL/native-tls) to ensure portable builds. Do not add
   an OpenSSL or `native-tls` feature path.
@@ -228,6 +235,10 @@ it.
 - **Asset Reservation Accounting**: `ExecutionLedger` MUST track `reserved_cash` for open buy orders and `reserved_qty` per symbol for open sell orders. Reject any new order that exceeds available (unreserved) cash or long quantity (unless shorting is explicitly enabled).
 - **Strict Order FSM & Idempotency**: Enforce valid order state transitions (`PendingSubmit` -> `Open` -> `PartiallyFilled` -> `Filled` / `Canceled` / `Rejected`) and deduplicate fills by `exec_id`. Never apply the same fill twice.
 - **Backtest-Live Parity**: Running the exact same `Strategy` struct through `BacktestRunner` and through `LiveRunner` + `PaperBroker` fed with identical bar/tick events MUST produce bit-for-bit identical fills, fees, and final `Decimal` equity.
+- **Live Feature Isolation**: `kurumi-exec`'s async broker adapters, `LiveRunner`, and `kurumi-feed` dependency MUST be optional and gated by `#[cfg(feature = "live")]`. A default `kurumi-exec` build and a `kurumi` build without `exec-live` MUST remain runtime-free; the JSONL journal uses a hand-rolled JSON writer, and `serde_json` is a `live`-only dependency.
+- **Live Feed Fidelity**: `LiveRunner` MUST translate `kurumi-feed` trades, quotes, and finalized bars into `ExecMarketEvent` without routing prices through `f64`, and MUST mark the ledger from the event timestamp before invoking a strategy. Optional `BarAggregator` output replaces raw trades for the strategy while finalized bars remain the only accepted bar input.
+- **Broker Contract**: `ExecutionBroker` implementations MUST be `Send + Sync`, return boxed futures, publish every report through `subscribe_reports`, use deterministic timestamps from market events (never `Utc::now`), and parse all REST prices and quantities directly into `Decimal` strings. `sync_account` is the startup reconciliation hook; `on_market_event` may be a no-op for a real venue.
+- **Live Shutdown & Lag**: On shutdown `LiveRunner` MUST call `Strategy::on_stop`, optionally cancel every open order, release ledger reservations, flush the journal, and return a `LiveSessionSummary`. Broadcast lag MUST be logged; when configured, a skipped-event threshold pauses new exposure while reducing orders remain accepted.
 
 ## 9. Coding & Testing Standards
 
@@ -279,10 +290,10 @@ it.
   `kurumi-core` or `kurumi-math` instead.
 - Keep `Cargo.lock` committed so workspace builds are reproducible.
 - Async dependencies (`tokio`, `tokio-tungstenite`, `reqwest`, `futures-util`,
-  `bytes`, `tracing`) are declared once in the workspace and may be consumed
-  only by `kurumi-feed`. `serde` and `serde_json` are synchronous data
-  dependencies and may additionally be consumed by `kurumi-exec` for its JSONL
-  audit journal.
+  `bytes`, `tracing`) are declared once in the workspace and may be consumed by
+  `kurumi-feed` and, only as optional dependencies behind the `live` feature, by
+  `kurumi-exec`. `serde` is a synchronous data dependency; `serde_json` is
+  `live`-only, because the default JSONL journal serializes without it.
 
 ## 11. Definition of Done
 
