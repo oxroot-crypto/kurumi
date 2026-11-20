@@ -200,8 +200,10 @@ name = "kurumi-backtest"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "chrono",
  "kurumi-core",
  "kurumi-math",
+ "kurumi-portfolio",
  "kurumi-pricing",
  "kurumi-risk",
  "kurumi-ta",
