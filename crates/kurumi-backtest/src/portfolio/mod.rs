@@ -4,7 +4,9 @@
 //! it:
 //!
 //! - [`feed`] provides [`MarketSnapshot`] and [`MultiAssetFeed`], the
-//!   deterministic union timeline of several OHLCV series;
+//!   deterministic union timeline of several OHLCV series, plus
+//!   [`AlignedMarketData`] and [`MarketSlice`] for sharing one immutable
+//!   timeline across validation runs without cloning bars;
 //! - [`account`] provides [`AssetPosition`], [`MultiAssetFill`], and
 //!   [`MultiAssetAccount`], the `Decimal` ledger for several instruments;
 //! - [`trigger`] provides [`TriggerContext`], the [`RebalanceTrigger`] trait,
@@ -12,7 +14,7 @@
 //! - [`allocator`] bridges the loop to `kurumi-portfolio` with static, rolling
 //!   optimizer, and closure-backed target-weight allocators.
 //! - [`engine`] runs the backtest: signal timing, halt handling,
-//!   sell-before-buy execution, and the audit trail.
+//!   sell-before-buy execution, warmup prefixes, and the audit trail.
 //! - [`report`] turns the equity curve into risk metrics and benchmark-relative
 //!   attribution, keeping every rebalance event and weight snapshot.
 //!
@@ -83,7 +85,7 @@ pub use allocator::{
     StaticWeightAllocator, TargetWeightAllocator,
 };
 pub use engine::{ExecutionTiming, PortfolioBacktestConfig, PortfolioBacktestEngine};
-pub use feed::{MarketSnapshot, MultiAssetFeed};
+pub use feed::{AlignedMarketData, MarketSlice, MarketSnapshot, MultiAssetFeed};
 pub use report::{BenchmarkComparison, PortfolioBacktestReport, RebalanceEvent};
 pub use trigger::{
     CalendarTrigger, CompositeTrigger, DriftTrigger, RebalanceCause, RebalanceTrigger,
