@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="220" viewBox="0 0 1600 220" role="img" aria-label="Kurumi banner">
+  <defs>
+    <linearGradient id="kurumi-light-bg" x1="0" y1="0" x2="1600" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#ECFDF5"/>
+    </linearGradient>
+    <linearGradient id="kurumi-light-logo" x1="14" y1="10" x2="114" y2="118" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2DD4BF"/>
+      <stop offset="0.55" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+    <linearGradient id="kurumi-light-area" x1="0" y1="30" x2="0" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14B8A6" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="kurumi-light-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#14B8A6" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="kurumi-light-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#0F172A" stroke-opacity="0.035"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="220" fill="url(#kurumi-light-bg)"/>
+  <rect width="1600" height="220" fill="url(#kurumi-light-grid)"/>
+  <ellipse cx="1180" cy="110" rx="430" ry="150" fill="url(#kurumi-light-glow)"/>
+  <g transform="translate(84 42) scale(1.08)">
+    <rect x="4" y="4" width="120" height="120" rx="30" fill="url(#kurumi-light-logo)"/>
+    <path d="M44 34v60M44 64l42-30M44 64l44 30" fill="none" stroke="#F8FAFC" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="100" cy="32" r="5.5" fill="#FBBF24"/>
+  </g>
+  <line x1="244" y1="54" x2="244" y2="166" stroke="#0F172A" stroke-opacity="0.08" stroke-width="2"/>
+  <path d="M300 174 L390 160 L480 168 L570 132 L660 144 L750 108 L840 120 L930 86 L1020 98 L1110 64 L1200 76 L1290 44 L1380 54 L1470 30 L1500 34 L1500 190 L300 190 Z" fill="url(#kurumi-light-area)"/>
+  <path d="M300 174 L390 160 L480 168 L570 132 L660 144 L750 108 L840 120 L930 86 L1020 98 L1110 64 L1200 76 L1290 44 L1380 54 L1470 30 L1500 34" fill="none" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="300" y1="190" x2="1500" y2="190" stroke="#0F172A" stroke-opacity="0.08" stroke-width="2"/>
+  <g fill="#F8FAFC" stroke="#0F766E" stroke-width="3">
+    <circle cx="300" cy="174" r="5"/>
+    <circle cx="570" cy="132" r="5"/>
+    <circle cx="750" cy="108" r="5"/>
+    <circle cx="930" cy="86" r="5"/>
+    <circle cx="1110" cy="64" r="5"/>
+    <circle cx="1470" cy="30" r="5"/>
+  </g>
+  <line x1="1290" y1="44" x2="1290" y2="190" stroke="#F59E0B" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="4 6"/>
+  <circle cx="1290" cy="44" r="10" fill="#F59E0B" fill-opacity="0.16"/>
+  <circle cx="1290" cy="44" r="5" fill="#F59E0B"/>
+</svg>
