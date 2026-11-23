@@ -755,10 +755,14 @@ mod tests {
 
     #[test]
     fn jsonl_journal_writes_one_object_per_line() {
+        let thread = std::thread::current()
+            .name()
+            .unwrap_or("test")
+            .replace(':', "_");
         let path = std::env::temp_dir().join(format!(
             "kurumi-exec-journal-{}-{}.jsonl",
             std::process::id(),
-            std::thread::current().name().unwrap_or("test")
+            thread
         ));
         {
             let mut journal = JsonlFileJournal::create(&path).expect("create");
@@ -788,10 +792,14 @@ mod tests {
 
     #[test]
     fn nonblocking_journal_writes_and_flushes_on_a_writer_thread() {
+        let thread = std::thread::current()
+            .name()
+            .unwrap_or("test")
+            .replace(':', "_");
         let path = std::env::temp_dir().join(format!(
             "kurumi-exec-journal-nonblocking-{}-{}.jsonl",
             std::process::id(),
-            std::thread::current().name().unwrap_or("test")
+            thread
         ));
         let inner = JsonlFileJournal::create(&path).expect("create");
         let mut journal = NonBlockingJournal::new(Box::new(inner)).expect("adapter");
